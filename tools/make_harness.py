@@ -27,17 +27,21 @@ def main():
     test_path, out_path = sys.argv[1], sys.argv[2]
     parts = ["local SIT = {src = {}}\nlocal realOs = os\nSIT.os = setmetatable({clock = function() return SIT.clock and SIT.clock() or realOs.clock() end}, {__index = realOs})\n"]
     parts.append("local mock = (function()\n" + read(os.path.join(ROOT, "tools/mock/roblox_mock.lua")) + "\nend)()\n")
-    parts.append(fn("Config", read(os.path.join(SRC, "ReplicatedStorage/Shared/Config.lua"))))
-    parts.append(fn("VehicleFactory", read(os.path.join(SRC, "ReplicatedStorage/Shared/VehicleFactory.lua"))))
-    parts.append(fn("TrafficSim", read(os.path.join(SRC, "ReplicatedStorage/Shared/TrafficSim.lua"))))
-    parts.append(fn("WorldBuilder", read(os.path.join(SRC, "ServerScriptService/Main/WorldBuilder.lua"))))
-    parts.append(fn("TrafficServer", read(os.path.join(SRC, "ServerScriptService/Main/TrafficServer.lua"))))
-    parts.append(fn("PlayerLook", read(os.path.join(SRC, "ServerScriptService/Main/PlayerLook.lua"))))
-    parts.append(fn("Main", read(os.path.join(SRC, "ServerScriptService/Main/init.server.lua"))))
-    parts.append(fn("Client", read(os.path.join(SRC, "StarterPlayer/StarterPlayerScripts/Client.client.lua"))))
-    parts.append(fn("TrafficClient", read(os.path.join(SRC, "StarterPlayer/StarterPlayerScripts/TrafficClient.client.lua"))))
-    parts.append(fn("Weather", read(os.path.join(SRC, "StarterPlayer/StarterPlayerScripts/Weather.client.lua"))))
-    parts.append(fn("VehicleRider", read(os.path.join(SRC, "StarterPlayer/StarterPlayerScripts/VehicleRider.client.lua"))))
+    shared_dir = os.path.join(SRC, "ReplicatedStorage/Shared")
+    main_dir = os.path.join(SRC, "ServerScriptService/Main")
+    client_dir = os.path.join(SRC, "StarterPlayer/StarterPlayerScripts")
+    shared = sorted(f[:-4] for f in os.listdir(shared_dir) if f.endswith(".lua"))
+    mains = sorted(f[:-4] for f in os.listdir(main_dir) if f.endswith(".lua") and not f.startswith("init."))
+    for name in shared:
+        parts.append(fn(name, read(os.path.join(shared_dir, name + ".lua"))))
+    for name in mains:
+        parts.append(fn(name, read(os.path.join(main_dir, name + ".lua"))))
+    parts.append(fn("Main", read(os.path.join(main_dir, "init.server.lua"))))
+    for f in sorted(os.listdir(client_dir)):
+        if f.endswith(".client.lua"):
+            parts.append(fn(f[:-len(".client.lua")], read(os.path.join(client_dir, f))))
+    parts.append("SIT.sharedModules = {" + ", ".join(repr(n) for n in shared) + "}\n")
+    parts.append("SIT.mainModules = {" + ", ".join(repr(n) for n in mains) + "}\n")
     parts.append(r'''
 local moduleCache = {}
 function require(inst)
@@ -52,10 +56,10 @@ end
 function SIT.mount()
     local RS = game:GetService("ReplicatedStorage")
     local shared = Instance.new("Folder") shared.Name = "Shared" shared.Parent = RS
-    module(shared, "Config") module(shared, "VehicleFactory") module(shared, "TrafficSim")
+    for _, n in ipairs(SIT.sharedModules) do module(shared, n) end
     local SSS = game:GetService("ServerScriptService")
     local main = Instance.new("Script") main.Name = "Main" main.Parent = SSS
-    module(main, "WorldBuilder") module(main, "TrafficServer") module(main, "PlayerLook")
+    for _, n in ipairs(SIT.mainModules) do module(main, n) end
     SIT.mainScript = main
 end
 function SIT.runServer() SIT.src.Main(SIT.mainScript) end

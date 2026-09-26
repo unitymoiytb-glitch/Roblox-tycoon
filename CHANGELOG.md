@@ -1,5 +1,52 @@
 # CHANGELOG
 
+## V29 WORLD (world branch)
+
+See [MERGE_NOTES.md](MERGE_NOTES.md) for the full per-file list and the contracts for the
+systems branch. Main, Client and Config are **unchanged**; no remotes or profile data changed.
+
+- **One continuous city:**
+  - the 5 districts are connected by a serpentine road (curved arcs between the tunnels)
+  - transition belts that block sightlines and preview the next district: slum hill with a
+    water tower, a metro viaduct, an expressway with glass towers, a terraced palace hill
+  - ridges at both ends of the city
+- **Visual progression:** new building variants per district.
+  - 2: havelis, bazaar, tall houses
+  - 3: mid-rises, shutter rows, cloud kitchen
+  - 4: glass towers, stepped offices, plaza
+  - 5: palace wings, marble villas, gateway, and a Grand Palace landmark
+- **Homes evolve with rank:** Tin Shack → Concrete Room → Small Flat → City Apartment →
+  Palace Suite (same footprint, new interior, alley dressing, sign).
+- **One hazard per district** in the median, deterministic from server time; the client
+  renders it and the server re-validates hits:
+  - 1: river crossing on bobbing, tilting and sinking planks (replaces the train). Falling
+    in counts as a hit.
+  - 2: the train (moved from district 1, same behaviour)
+  - 3: tower cranes swinging loads
+  - 4: laser fence wave (on / warning / off)
+  - 5: fountain jets (bubbling warning, then eruption)
+- **Hook models only (no logic):**
+  - `CrateKiosk_Z1..Z5`, `SpecialContractBoard_Z1..Z5`, `BlackMarketContract_Z2` (placeholder
+    for a skill-based delivery; no gambling or wagers), `RoyalGarage_Z5`
+  - each carries `Hook`/`Zone` attributes and a `PromptAnchor` attachment
+- **Collectible models:** Skybike MK2, Gold Tuk-Tuk, Courier Jetboard, Neon Delivery Drone,
+  Armored SUV, Hypercar X, Royal Convoy, Flying Maharaja Throne.
+  - shown in the kiosks
+  - templates in `ReplicatedStorage.SIT_CollectibleTemplates`
+- **Parody cameos** (original characters, no real faces): Chai-Fluencer Rinku,
+  Mr. Moneybags, Superstar Dhamaka Dev, Captain Sixer, DJ Masala Queen.
+- **Verified offline:** `tools/run_checks.sh` passes in full.
+  - geometry: 0 failures, including "visible geometry closes every block except the tunnels"
+  - traffic
+  - integration, with the new tests: train in zone 2, river fall → respawn, forged hazard
+    hit rejected, each hazard alternates safe and dangerous
+  - test mode
+  - rbxlx build with XML round trip
+- **Not verified in Studio:**
+  - no Roblox screenshots; previews 10 and 11 come from the offline renderer
+  - still to test in Studio: physics feel on the moving planks, lighting and materials,
+    performance on mobile
+
 ## V28 PROTOTYPE
 
 - **Levels 2x longer:** the walkable road goes from 220 to 440 studs, and traffic runs over

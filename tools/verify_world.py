@@ -210,8 +210,10 @@ def main(path):
     check(all(p["transp"] == 1 and p["collide"] and not p["query"] and not p["touch"] for p in bounds),
           f"{len(bounds)} GameplayBounds parts are invisible, collidable, non-query, non-touch")
     check(all(world_extent_y(p)[1] >= 55 for p in bounds), "every bounds wall is at least 55 studs tall")
+    # Only geometry a player can actually stand next to (inside the walkable corridor) matters here.
     in_pen_tops = [world_extent_y(p)[1] for p in parts if p["collide"] and "/GameplayBounds/" not in p["path"]
-                   and zone_of(p) and -PEN <= p["pos"][2] <= PEN and "RoadTunnel" not in p["path"]]
+                   and zone_of(p) and -PEN <= p["pos"][2] <= PEN and "RoadTunnel" not in p["path"]
+                   and abs(p["pos"][0] - ZONES[zone_of(p) - 1]) <= SIDE]
     check(max(in_pen_tops) < 40, f"tallest climbable collidable inside a district tops at {max(in_pen_tops):.1f} (< 40)")
 
     # Spawn

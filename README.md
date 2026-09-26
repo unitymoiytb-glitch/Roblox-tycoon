@@ -4,10 +4,10 @@ Roblox delivery / progression tycoon. Start broke in a tin shack, take jobs from
 cross dangerous traffic to deliver, earn ₹ + XP, buy mobility and businesses, rank up
 (Street Runner → Courier → Delivery Hustler → Trader → Business Boss → Maharaja).
 
-**Current build:** `builds/Survive_India_Tycoon_V28_PROTOTYPE.rbxlx`. Open it in Roblox Studio and press Play.
+**Current build:** `builds/Survive_India_Tycoon_V29_WORLD.rbxlx`. Open it in Roblox Studio and press Play.
 The world is generated at runtime by `ServerScriptService/Main`, so edit mode shows only the spawn.
 
-See [CHANGELOG.md](CHANGELOG.md) for what changed in V26 and what was / was not verified.
+See [CHANGELOG.md](CHANGELOG.md) for what changed and what was / was not verified, and [MERGE_NOTES.md](MERGE_NOTES.md) for the world-branch merge contract.
 
 ## Source layout (Rojo conventions, `default.project.json`)
 
@@ -15,17 +15,24 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed in V26 and what was / was not 
 src/ReplicatedStorage/Shared/
   Config.lua            ranks, economy, rewards + V26 World/Traffic tuning
   TrafficSim.lua        pure traffic simulation (lanes, speeds, following, accidents, snapshots)
-  VehicleFactory.lua    lightweight scooter / motorbike / tuk-tuk / car models
+  VehicleFactory.lua    lightweight scooter / motorbike / tuk-tuk / car models + collectibles
+  WorldLayout.lua       shared world constants + deterministic district hazards (river, crane, laser, fountain)
 src/ServerScriptService/Main/
   init.server.lua       game systems: profiles, DataStore fallback, missions, NPCs, rank gates, shop
   PlayerLook.lua        rank-1 street-rags skin + overhead role title
   WorldBuilder.lua      generates workspace.SIT_World (districts, starter shack, GameplayBounds)
   TrafficServer.lua     steps one TrafficSim per occupied district, sends snapshots, validates hits
+  WorldKit.lua          part / sign helpers for the world modules
+  ZoneStyles.lua        per-district building variants, landmarks, rank homes
+  HazardBuilder.lua     static median geometry for each district's hazard
+  WorldConnectors.lua   serpentine road + transition belts joining the districts
+  WorldHooks.lua        crate kiosks, contract boards, black-market / royal-garage hooks, cameos, collectibles
 src/StarterPlayer/StarterPlayerScripts/
   Client.client.lua        HUD, menus, guides, spawn intro camera
   TrafficClient.client.lua renders traffic + the commuter train, client-side hit detection, horns
   VehicleRider.client.lua  procedural riding poses (bike, scooter, tuk-tuk, cars, hoverboard)
   Weather.client.lua       brown monsoon rain, slippery ground, rain banner
+  HazardClient.client.lua  renders the current district's moving hazard, reports hazard hits
 ```
 
 ## Build and check

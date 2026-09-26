@@ -161,7 +161,180 @@ builders.car = function(model, seed, opts)
     end
 end
 
--- kind: "scooter" | "motorbike" | "tuktuk" | "car"
+-- ================================================================ rare crate collectibles
+-- Original designs (no real brands/logos). Built facing -Z, resting on y=0, never ridden by
+-- traffic; the systems branch clones them from ReplicatedStorage.SIT_CollectibleTemplates.
+local GOLD = Color3.fromRGB(226, 186, 70)
+local NEON_CYAN = Color3.fromRGB(60, 230, 255)
+local NEON_PINK = Color3.fromRGB(255, 70, 170)
+
+local function neon(model, name, size, pos, color, rot)
+    local p = newPart(model, name, size, pos, color, Enum.Material.Neon, nil, rot)
+    p.CastShadow = false
+    return p
+end
+
+local function newWedge(model, name, size, pos, color, material, rot)
+    local w = Instance.new("WedgePart")
+    w.Name = name
+    w.Anchored = true
+    w.CanCollide = false
+    w.CanTouch = false
+    w.CanQuery = false
+    w.Size = size
+    w.Color = color
+    w.Material = material or Enum.Material.Metal
+    local cf = CFrame.new(pos)
+    if rot then cf = cf * rot end
+    w.CFrame = cf
+    w.Parent = model
+    return w
+end
+
+-- Skybike MK2: a hovering courier bike lifted by two ducted fans.
+builders.skybike_mk2 = function(model, seed)
+    local body = Color3.fromRGB(34, 38, 48)
+    newPart(model, "Body", Vector3.new(1.4, 1.2, 5.2), Vector3.new(0, 2.6, 0), body, Enum.Material.Metal)
+    newPart(model, "Seat", Vector3.new(1.2, 0.35, 1.8), Vector3.new(0, 3.35, 0.9), Color3.fromRGB(20, 20, 22))
+    newPart(model, "Handlebar", Vector3.new(2.2, 0.25, 0.3), Vector3.new(0, 3.8, -1.8), Color3.fromRGB(20, 20, 22), Enum.Material.Metal)
+    neon(model, "Stripe", Vector3.new(1.45, 0.15, 4.8), Vector3.new(0, 2.95, 0), NEON_CYAN)
+    for _, x in ipairs({-1.9, 1.9}) do
+        newPart(model, "FanDuct", Vector3.new(0.8, 2.6, 2.6), Vector3.new(x, 2.3, 0.2), Color3.fromRGB(70, 76, 90), Enum.Material.Metal, Enum.PartType.Cylinder, CFrame.Angles(0, 0, math.rad(90)))
+        neon(model, "FanGlow", Vector3.new(0.1, 2.1, 2.1), Vector3.new(x, 1.95, 0.2), NEON_CYAN, CFrame.Angles(0, 0, math.rad(90))).Shape = Enum.PartType.Cylinder
+        newWedge(model, "Wing", Vector3.new(0.2, 0.9, 2.2), Vector3.new(x * 1.2, 2.9, 1.6), body, Enum.Material.Metal, CFrame.Angles(0, math.rad(180), 0))
+    end
+    neon(model, "HeadLight", Vector3.new(0.9, 0.4, 0.2), Vector3.new(0, 2.8, -2.65), Color3.fromRGB(255, 250, 220))
+end
+
+-- Gold Tuk-Tuk: the classic auto-rickshaw, dipped in gold with a maroon canopy and fringe.
+builders.gold_tuktuk = function(model, seed, opts)
+    builders.tuktuk(model, seed, {rider = false})
+    for _, p in ipairs(model:GetChildren()) do
+        if p:IsA("BasePart") then
+            if p.Name == "Lower" or p.Name == "Nose" then p.Color = GOLD p.Material = Enum.Material.Foil end
+            if p.Name == "Canopy" or p.Name == "CanopyBack" then p.Color = Color3.fromRGB(120, 20, 40) end
+            if p.Name == "PostL" or p.Name == "PostR" then p.Color = GOLD p.Material = Enum.Material.Foil end
+        end
+    end
+    for i = -2, 2 do
+        newPart(model, "Fringe", Vector3.new(0.25, 0.45, 0.1), Vector3.new(i * 1.0, 5.45, -3.0), GOLD, Enum.Material.Foil)
+    end
+end
+
+-- Courier Jetboard: a standing board with twin rear jets and a strapped parcel.
+builders.courier_jetboard = function(model, seed)
+    newPart(model, "Deck", Vector3.new(1.8, 0.3, 5.2), Vector3.new(0, 1.2, 0), Color3.fromRGB(240, 120, 30), Enum.Material.Metal)
+    for _, x in ipairs({-0.6, 0.6}) do
+        newPart(model, "Jet", Vector3.new(0.7, 0.7, 1.6), Vector3.new(x, 1.0, 2.6), Color3.fromRGB(60, 60, 66), Enum.Material.Metal)
+        neon(model, "JetFlame", Vector3.new(0.5, 0.5, 0.8), Vector3.new(x, 1.0, 3.6), Color3.fromRGB(255, 170, 40))
+    end
+    newPart(model, "Parcel", Vector3.new(1.2, 1.0, 1.2), Vector3.new(0, 1.85, 1.6), Color3.fromRGB(170, 128, 80), Enum.Material.Cardboard)
+    neon(model, "UnderGlow", Vector3.new(1.4, 0.1, 4.6), Vector3.new(0, 0.98, 0), Color3.fromRGB(255, 150, 40))
+end
+
+-- Neon Delivery Drone: quadcopter with a dangling parcel.
+builders.delivery_drone = function(model, seed)
+    newPart(model, "Core", Vector3.new(1.6, 0.7, 1.6), Vector3.new(0, 4.2, 0), Color3.fromRGB(26, 28, 34), Enum.Material.Metal)
+    for i = 0, 3 do
+        local a = math.rad(45 + i * 90)
+        local x, z = math.cos(a) * 1.9, math.sin(a) * 1.9
+        newPart(model, "Arm", Vector3.new(0.25, 0.2, 2.2), Vector3.new(x / 2, 4.2, z / 2), Color3.fromRGB(40, 42, 50), Enum.Material.Metal, nil, CFrame.lookAt(Vector3.zero, Vector3.new(x, 0, z)).Rotation)
+        newPart(model, "Rotor", Vector3.new(0.08, 1.9, 1.9), Vector3.new(x, 4.45, z), Color3.fromRGB(60, 60, 66), Enum.Material.Metal, Enum.PartType.Cylinder, CFrame.Angles(0, 0, math.rad(90)))
+        neon(model, "RotorLight", Vector3.new(0.3, 0.3, 0.3), Vector3.new(x, 4.1, z), (i % 2 == 0) and NEON_PINK or NEON_CYAN)
+    end
+    newPart(model, "Tether", Vector3.new(0.06, 1.4, 0.06), Vector3.new(0, 3.2, 0), Color3.fromRGB(20, 20, 20))
+    newPart(model, "Parcel", Vector3.new(1.1, 0.9, 1.1), Vector3.new(0, 2.1, 0), Color3.fromRGB(170, 128, 80), Enum.Material.Cardboard)
+end
+
+-- Armored SUV: the car body scaled up, plated, with slit windows and a bull bar.
+builders.armored_suv = function(model, seed)
+    builders.car(model, seed, {rider = false})
+    for _, p in ipairs(model:GetChildren()) do
+        if p:IsA("BasePart") and p.Name ~= "Root" then
+            p.Size = p.Size * 1.25
+            p.Position = p.Position * 1.25
+            if p.Name == "Body" or p.Name == "Roof" or p.Name == "Hood" then p.Color = Color3.fromRGB(58, 64, 56) p.Material = Enum.Material.DiamondPlate end
+            if p.Name == "Glass" then p.Color = Color3.fromRGB(20, 22, 26) end
+        end
+    end
+    newPart(model, "BullBar", Vector3.new(8.6, 1.4, 0.5), Vector3.new(0, 1.9, -7.8), Color3.fromRGB(30, 30, 32), Enum.Material.Metal)
+    newPart(model, "SideArmorL", Vector3.new(0.3, 1.6, 12), Vector3.new(-4.2, 2.6, 0), Color3.fromRGB(48, 54, 46), Enum.Material.DiamondPlate)
+    newPart(model, "SideArmorR", Vector3.new(0.3, 1.6, 12), Vector3.new(4.2, 2.6, 0), Color3.fromRGB(48, 54, 46), Enum.Material.DiamondPlate)
+    newPart(model, "RoofHatch", Vector3.new(2, 0.5, 2), Vector3.new(0, 6.35, 0.8), Color3.fromRGB(40, 44, 38), Enum.Material.Metal)
+end
+
+-- Hypercar X: low wedge supercar with a big rear wing and underglow.
+builders.hypercar_x = function(model, seed)
+    local paint = ({Color3.fromRGB(230, 40, 60), Color3.fromRGB(250, 200, 30), Color3.fromRGB(40, 220, 160)})[(seed % 3) + 1]
+    for _, x in ipairs({-2.9, 2.9}) do
+        for _, z in ipairs({-3.8, 3.9}) do
+            newPart(model, "Wheel", Vector3.new(0.9, 2.2, 2.2), Vector3.new(x, 1.1, z), Color3.fromRGB(20, 20, 20), Enum.Material.Rubber, Enum.PartType.Cylinder)
+        end
+    end
+    newPart(model, "Chassis", Vector3.new(6.4, 1.1, 11.8), Vector3.new(0, 1.2, 0), paint, Enum.Material.Metal)
+    newWedge(model, "Nose", Vector3.new(6.2, 1.0, 4.2), Vector3.new(0, 2.25, -3.7), paint, Enum.Material.Metal)
+    newPart(model, "Cockpit", Vector3.new(4.8, 1.3, 4.6), Vector3.new(0, 2.4, 0.9), Color3.fromRGB(20, 24, 30), Enum.Material.Glass)
+    newWedge(model, "RearDeck", Vector3.new(6.2, 1.1, 3.2), Vector3.new(0, 2.25, 4.3), paint, Enum.Material.Metal, CFrame.Angles(0, math.rad(180), 0))
+    newPart(model, "WingPostL", Vector3.new(0.2, 1.2, 0.3), Vector3.new(-2, 3.2, 5.4), Color3.fromRGB(20, 20, 22), Enum.Material.Metal)
+    newPart(model, "WingPostR", Vector3.new(0.2, 1.2, 0.3), Vector3.new(2, 3.2, 5.4), Color3.fromRGB(20, 20, 22), Enum.Material.Metal)
+    newPart(model, "RearWing", Vector3.new(6.6, 0.2, 1.3), Vector3.new(0, 3.85, 5.5), Color3.fromRGB(20, 20, 22), Enum.Material.Metal)
+    neon(model, "UnderGlow", Vector3.new(5.8, 0.1, 10.5), Vector3.new(0, 0.62, 0), NEON_CYAN)
+    neon(model, "TailLight", Vector3.new(5.4, 0.3, 0.2), Vector3.new(0, 1.9, 5.95), Color3.fromRGB(255, 40, 40))
+end
+
+-- Flying Maharaja Throne: gilded throne on a floating dais with a parasol and ornamental wings.
+builders.flying_throne = function(model, seed)
+    local red = Color3.fromRGB(150, 24, 40)
+    neon(model, "LevitationRing", Vector3.new(0.2, 5.4, 5.4), Vector3.new(0, 0.8, 0), Color3.fromRGB(255, 210, 120), CFrame.Angles(0, 0, math.rad(90))).Shape = Enum.PartType.Cylinder
+    newPart(model, "Dais", Vector3.new(0.9, 5, 5), Vector3.new(0, 1.5, 0), GOLD, Enum.Material.Foil, Enum.PartType.Cylinder, CFrame.Angles(0, 0, math.rad(90)))
+    newPart(model, "Seat", Vector3.new(2.8, 1.2, 2.6), Vector3.new(0, 2.6, 0.2), GOLD, Enum.Material.Foil)
+    newPart(model, "Cushion", Vector3.new(2.4, 0.5, 2.2), Vector3.new(0, 3.45, 0.2), red, Enum.Material.Fabric)
+    newPart(model, "Back", Vector3.new(2.8, 4, 0.6), Vector3.new(0, 5, 1.4), GOLD, Enum.Material.Foil)
+    newPart(model, "BackCushion", Vector3.new(2.2, 3, 0.2), Vector3.new(0, 4.9, 1.05), red, Enum.Material.Fabric)
+    newPart(model, "Crest", Vector3.new(1.6, 1.6, 1.6), Vector3.new(0, 7.4, 1.4), GOLD, Enum.Material.Foil, Enum.PartType.Ball)
+    for _, x in ipairs({-1.6, 1.6}) do
+        newPart(model, "ArmRest", Vector3.new(0.4, 1.2, 2.4), Vector3.new(x, 3.6, 0.2), GOLD, Enum.Material.Foil)
+        newWedge(model, "Wing", Vector3.new(0.2, 2.4, 3.2), Vector3.new(x * 2.1, 4.6, 1.8), Color3.fromRGB(245, 240, 225), Enum.Material.Marble, CFrame.Angles(0, math.rad(180), math.rad(x > 0 and 20 or -20)))
+    end
+    newPart(model, "ParasolPole", Vector3.new(0.2, 5, 0.2), Vector3.new(1.9, 6.2, 1.6), GOLD, Enum.Material.Foil)
+    newPart(model, "Parasol", Vector3.new(0.3, 4.4, 4.4), Vector3.new(1.9, 8.7, 1.2), red, Enum.Material.Fabric, Enum.PartType.Cylinder, CFrame.Angles(0, 0, math.rad(90)))
+end
+
+-- Royal Convoy: outrider bikes, an armored lead SUV and a long golden limousine as one model.
+builders.royal_convoy = function(model, seed)
+    local function place(kind, s, offset)
+        local sub = Instance.new("Model")
+        builders[kind](sub, s, {rider = false})
+        for _, p in ipairs(sub:GetChildren()) do
+            p.CFrame = CFrame.new(offset) * p.CFrame
+            p.Parent = model
+        end
+        sub:Destroy()
+    end
+    place("motorbike", 3, Vector3.new(-2.2, 0, -26))
+    place("motorbike", 5, Vector3.new(2.2, 0, -26))
+    place("armored_suv", seed, Vector3.new(0, 0, -14))
+    -- Golden limousine: stretched car body.
+    local limo = Instance.new("Model")
+    builders.car(limo, 2, {rider = false})
+    for _, p in ipairs(limo:GetChildren()) do
+        if p:IsA("BasePart") then
+            if p.Name == "Body" or p.Name == "Glass" or p.Name == "Roof" then p.Size = Vector3.new(p.Size.X, p.Size.Y, p.Size.Z * 1.9) end
+            if p.Name == "Body" or p.Name == "Roof" or p.Name == "Hood" then p.Color = GOLD p.Material = Enum.Material.Foil end
+            p.CFrame = CFrame.new(0, 0, 6) * p.CFrame
+            p.Parent = model
+        end
+    end
+    limo:Destroy()
+    for _, z in ipairs({-5, 17}) do
+        newPart(model, "PennantPole", Vector3.new(0.15, 3, 0.15), Vector3.new(-3, 6, z), GOLD, Enum.Material.Foil)
+        newPart(model, "Pennant", Vector3.new(0.05, 1.2, 2), Vector3.new(-3, 6.8, z + 1), Color3.fromRGB(110, 40, 140), Enum.Material.Fabric)
+    end
+end
+
+-- kind: "scooter" | "motorbike" | "tuktuk" | "car", or a collectible:
+-- "skybike_mk2" | "gold_tuktuk" | "courier_jetboard" | "delivery_drone" | "armored_suv" |
+-- "hypercar_x" | "royal_convoy" | "flying_throne"
 -- opts.rider=false builds a parked, empty vehicle.
 function VehicleFactory.build(kind, seed, opts)
     opts = opts or {}
@@ -175,5 +348,16 @@ function VehicleFactory.build(kind, seed, opts)
     builder(model, seed, opts)
     return model
 end
+
+VehicleFactory.Collectibles = {
+    {Id = "skybike_mk2", Name = "Skybike MK2", Rarity = "Legendary"},
+    {Id = "gold_tuktuk", Name = "Gold Tuk-Tuk", Rarity = "Epic"},
+    {Id = "courier_jetboard", Name = "Courier Jetboard", Rarity = "Rare"},
+    {Id = "delivery_drone", Name = "Neon Delivery Drone", Rarity = "Rare"},
+    {Id = "armored_suv", Name = "Armored SUV", Rarity = "Epic"},
+    {Id = "hypercar_x", Name = "Hypercar X", Rarity = "Legendary"},
+    {Id = "royal_convoy", Name = "Royal Convoy", Rarity = "Mythic"},
+    {Id = "flying_throne", Name = "Flying Maharaja Throne", Rarity = "Mythic"},
+}
 
 return VehicleFactory

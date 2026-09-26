@@ -317,6 +317,17 @@ def main():
     }
     parts_near = [p for p in parts if abs(p["c"][0] - cx) - bound_radius(p) < 260]
     for v in views:
+        if v.startswith("cam="):
+            # Free camera: cam=name:x,y,z:tx,ty,tz:fov (renders every part within 330 studs).
+            name, a, b, fov = v[4:].split(":")
+            cam = np.array([float(k) for k in a.split(",")])
+            tgt = np.array([float(k) for k in b.split(",")])
+            near = [p for p in parts if np.linalg.norm(p["c"] - cam) - bound_radius(p) < 330]
+            img = render_view(near, lights, cam, tgt, float(fov))
+            path = os.path.join(out_dir, f"preview_{name}.png")
+            img.save(path)
+            print("wrote", path)
+            continue
         if v == "top":
             img = render_view(parts_near, lights, None, None, W=420, H=1600, ortho=(cx - 75, cx + 55, -240, 240))
         else:

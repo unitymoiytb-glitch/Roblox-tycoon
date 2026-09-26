@@ -21,6 +21,7 @@ local home = plr:GetAttribute("HomeSpawn")
 local char, root = mock.makeCharacter(plr, home.Position)
 plr.CharacterAdded:Fire(char)
 SIT.runClient("TrafficClient")
+SIT.runClient("HazardClient")
 -- Run until the commuter train is passing the middle of the block (or 90 s).
 for i = 1, 60 * 90 do
     simTime += 1 / 60
@@ -56,5 +57,6 @@ local function dumpRoot(rootInst)
 end
 dumpRoot(workspace.SIT_World)
 dumpRoot(workspace.SIT_TrafficClient)
+if workspace:FindFirstChild("SIT_Hazards") then dumpRoot(workspace.SIT_Hazards) end
 dumpRoot(av)
 print(string.format("CAMHOME\t%.3f,%.3f,%.3f\t%.4f,%.4f,%.4f", home.Position.X, home.Position.Y, home.Position.Z, home.LookVector.X, home.LookVector.Y, home.LookVector.Z))

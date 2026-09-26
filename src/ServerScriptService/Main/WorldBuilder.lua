@@ -12,6 +12,14 @@
 -- So the only way from the home side to a drop point is straight through the traffic lanes.
 local WorldBuilder = {}
 
+-- World-branch modules (see MERGE_NOTES.md): shared layout + hazards, styles, connectors, hooks.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local WorldLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("WorldLayout"))
+local ZoneStyles = require(script.Parent:WaitForChild("ZoneStyles"))
+local HazardBuilder = require(script.Parent:WaitForChild("HazardBuilder"))
+local WorldConnectors = require(script.Parent:WaitForChild("WorldConnectors"))
+local WorldHooks = require(script.Parent:WaitForChild("WorldHooks"))
+
 local rad = math.rad
 local V3 = Vector3.new
 local RGB = Color3.fromRGB
@@ -361,34 +369,24 @@ local function buildRoad(folder, cx, W, z, detail)
     local L = W.TrafficHalfLength * 2 + 20
     local roadColor = ({RGB(58,54,50), RGB(54,52,50), RGB(48,48,48), RGB(40,40,42), RGB(34,34,38)})[z]
     local walk = ({RGB(124,114,100), RGB(132,124,112), RGB(150,148,142), RGB(176,176,172), RGB(206,204,198)})[z]
-    P(folder, "Road", V3(W.RoadHalfWidth * 2, 0.4, L), CFrame.new(cx, 0, 0), roadColor, M.Asphalt, true)
+    local mh = W.MedianHalfWidth
+    if WorldLayout.hazardKind(z) == "river" then
+        -- Two separate carriageways: the river channel between them is a real gap.
+        for _, sgn in ipairs({-1, 1}) do
+            local wdt = W.RoadHalfWidth - mh
+            P(folder, "Road", V3(wdt, 0.4, L), CFrame.new(cx + sgn * (mh + wdt / 2), 0, 0), roadColor, M.Asphalt, true)
+        end
+    else
+        P(folder, "Road", V3(W.RoadHalfWidth * 2, 0.4, L), CFrame.new(cx, 0, 0), roadColor, M.Asphalt, true)
+    end
     local walkLen = W.PenHalfLength * 2 + 20
     for _, side in ipairs({-1, 1}) do
         local w = W.SidewalkOuter - W.RoadHalfWidth
         P(folder, "Sidewalk", V3(w, 0.8, walkLen), CFrame.new(cx + side * (W.RoadHalfWidth + w / 2), 0.4, 0), walk, z <= 2 and M.Concrete or M.Pavement, true)
         P(folder, "Kerb", V3(0.5, 0.84, walkLen), CFrame.new(cx + side * (W.RoadHalfWidth + 0.25), 0.42, 0), z <= 2 and RGB(170,150,76) or RGB(210,210,204), M.Concrete)
     end
-    -- Railway between the two carriageways: ballast bed, sleepers, two rails, warning kerbs.
-    -- Cars never reach it, but a commuter train blasts through every 35-70 s (TrainClient).
-    local mh = W.MedianHalfWidth
-    local railLen = W.TrafficHalfLength * 2 + 20
-    P(folder, "Ballast", V3(mh * 2, 0.5, railLen), CFrame.new(cx, 0.25, 0), RGB(112,102,92), M.Pebble, true)
-    for _, s in ipairs({-1, 1}) do
-        P(folder, "RailKerb", V3(0.4, 0.62, railLen), CFrame.new(cx + s * (mh - 0.2), 0.31, 0), z <= 2 and RGB(214,184,60) or RGB(230,230,226), M.Concrete)
-        P(folder, "Rail", V3(0.3, 0.3, railLen), CFrame.new(cx + s * 2.4, 0.78, 0), RGB(150,150,156), M.Metal)
-    end
-    local sleeperStep = detail and 5 or 10
-    for zz = -W.PenHalfLength - 8, W.PenHalfLength + 8, sleeperStep do
-        P(folder, "Sleeper", V3(7.2, 0.22, 0.9), CFrame.new(cx, 0.6, zz), RGB(120,114,104), M.Concrete)
-    end
-    -- Level-crossing style signals: the lamps flash red before and while a train passes.
-    for i, sp in ipairs({{-1, -30}, {1, 30}, {-1, 72}, {1, -72}}) do
-        local x = cx + sp[1] * (mh - 0.8)
-        vcyl(folder, "SignalPost", 6.5, 0.3, x, 3.25, sp[2], RGB(40,40,42), M.Metal)
-        local lamp = ball(P(folder, "RailSignalLamp", V3(0.9, 0.9, 0.9), CFrame.new(x, 6.4, sp[2]), RGB(90,20,18), M.SmoothPlastic))
-        lamp.CastShadow = false
-        signBoard(folder, "TrainWarning", V3(3.2, 1.2, 0.12), V3(x, 5.0, sp[2] + 0.2), V3(-sp[1], 0, 0), "⚠ TRAINS", RGB(236,196,40), RGB(20,20,20))
-    end
+    -- The central strip is each district's own traversal hazard (river, train, cranes, lasers, fountains).
+    HazardBuilder.build(folder, cx, W, z, WorldLayout, detail)
     local step = detail and 16 or 32
     for _, dx in ipairs({-(mh + W.LaneWidth), mh + W.LaneWidth}) do
         for zz = -W.PenHalfLength - 30, W.PenHalfLength + 30, step do
@@ -638,45 +636,6 @@ local function buildStreetWires(folder, cx, W)
     wire(m, V3(xe, 12.0, -30), V3(xe, 12.0, 30), 1.0)
 end
 
--- ------------------------------------------------------------ generic later-district buildings
-local function simpleBlock(ctx, w0, w1, opts)
-    local folder, cx, W, side, rng = ctx.folder, ctx.cx, ctx.W, ctx.side, ctx.rng
-    local m = Instance.new("Model") m.Name = "Building" m.Parent = folder
-    local Wd, wc = w1 - w0, (w0 + w1) / 2
-    local function at(d, y, w, ry, rx, rz) return rowCF(cx, W, side, d, y, w, ry, rx, rz) end
-    local h = opts.height or (10 + rng:NextNumber() * 10)
-    P(m, "Block", V3(14, h, Wd - 0.4), at(7, h / 2, wc), opts.color or C.paint[rng:NextInteger(1, #C.paint)], opts.material or M.Concrete, true)
-    P(m, "Shopfront", V3(0.2, 5.5, Wd - 4), at(-0.1, 2.75, wc), RGB(40,44,50), M.Glass)
-    P(m, "Awning", V3(2.6, 0.15, Wd - 2.5), at(-1.2, 6.4, wc, 0, 0, 12), C.cloth[rng:NextInteger(1, #C.cloth)], M.Fabric)
-    if opts.sign then
-        signBoard(m, "Sign", V3(math.min(Wd - 3, 9), 1.6, 0.15), at(-0.3, 7.6, wc).Position, facingRoad(side), opts.sign, opts.signBg, opts.signFg)
-    end
-    return m
-end
-
-local function buildSimpleHome(folder, cx, W, z)
-    local m = Instance.new("Model") m.Name = "DistrictHome" m.Parent = folder
-    local ox = cx + (W.HomeBackX + W.AlleyBackX) / 2
-    local wallCol = ({nil, RGB(170,150,120), RGB(186,178,164), RGB(200,200,196), RGB(226,218,196)})[z]
-    P(m, "Floor", V3(14.4, 1.0, 18.4), CFrame.new(ox, 0.5, 0), RGB(150,140,126), M.Concrete, true)
-    P(m, "Back", V3(0.4, 10, 18.4), CFrame.new(ox - 7.2, 5, 0), wallCol, M.Concrete, true)
-    P(m, "Left", V3(14.4, 10, 0.4), CFrame.new(ox, 5, -9.2), wallCol, M.Concrete, true)
-    P(m, "Right", V3(14.4, 10, 0.4), CFrame.new(ox, 5, 9.2), wallCol, M.Concrete, true)
-    P(m, "Roof", V3(15.4, 0.5, 19.4), CFrame.new(ox, 10.2, 0), RGB(120,116,110), M.Concrete, true)
-    P(m, "Bed", V3(6.5, 1.4, 4.0), CFrame.new(ox - 3.3, 1.7, -6.4), RGB(90,70,50), M.WoodPlanks, true)
-    P(m, "Sheet", V3(6.3, 0.3, 3.8), CFrame.new(ox - 3.3, 2.55, -6.4), RGB(70,100,150), M.Fabric)
-    local lamp = ball(P(m, "Lamp", V3(0.6, 0.6, 0.6), CFrame.new(ox - 0.5, 8.4, 0), RGB(255,230,180), M.Neon))
-    local l = Instance.new("PointLight") l.Range = 18 l.Brightness = 1.2 l.Color = RGB(255,220,170) l.Parent = lamp
-    local x0, x1 = cx + W.AlleyBackX, cx - W.SidewalkOuter
-    P(m, "AlleyFloor", V3(x1 - x0, 0.8, W.AlleyHalfWidth * 2), CFrame.new((x0 + x1) / 2, 0.4, 0), RGB(140,132,120), M.Concrete, true)
-    -- Alley side walls (the neighbouring buildings).
-    for _, s in ipairs({-1, 1}) do
-        P(m, "AlleyWall", V3(x1 - x0, 12, 0.6), CFrame.new((x0 + x1) / 2, 6, s * (W.AlleyHalfWidth + 0.3)), wallCol, M.Concrete, true)
-        P(m, "HomeWall", V3(2, 12, 3.4), CFrame.new(x0 - 1, 6, s * (W.AlleyHalfWidth + 1.7)), wallCol, M.Concrete, true)
-    end
-    return m
-end
-
 -- ------------------------------------------------------------ gameplay bounds (one district)
 local function buildBounds(bounds, cx, W)
     local H = W.BoundsHeight
@@ -711,8 +670,20 @@ function WorldBuilder.build(Config, VehicleFactory)
     World.Name = "SIT_World"
     World.Parent = workspace
 
-    local ground = P(World, "Ground", V3(1000, 2, 900), CFrame.new(0, -1, 0), RGB(104,88,66), M.Ground, true)
-    ground.CastShadow = false
+    -- Ground in tiles, leaving a real gap for the district-1 river channel.
+    local GX, GZ = 500, 450
+    local riverX = W.ZoneCenters[1]
+    local mh = W.MedianHalfWidth
+    local zc = W.TrafficHalfLength + 30
+    local tiles = {
+        {-GX, riverX - mh, -GZ, GZ}, {riverX + mh, GX, -GZ, GZ},
+        {riverX - mh, riverX + mh, -GZ, -zc}, {riverX - mh, riverX + mh, zc, GZ},
+    }
+    for _, t in ipairs(tiles) do
+        local g = P(World, "Ground", V3(t[2] - t[1], 2, t[4] - t[3]), CFrame.new((t[1] + t[2]) / 2, -1, (t[3] + t[4]) / 2), RGB(104,88,66), M.Ground, true)
+        g.CastShadow = false
+    end
+    WorldHooks.collectibleTemplates(VehicleFactory)
 
     local layout = {World = World, zones = {}}
     local dropZs = {-196, -138, -67, -26, 23, 81, 140, 196}
@@ -753,7 +724,8 @@ function WorldBuilder.build(Config, VehicleFactory)
             garage(westCtx, 20, 38, {sign = "JUGAAD MOTOR WORKS"})
             tinShack(westCtx, -38, -20, {name = "BrokerOffice", style = "counter", sign = "STREET BROKER", signBg = RGB(40,110,70), signFg = RGB(240,240,220), goods = RGB(90,70,50), awning = RGB(62,98,70)})
             tinShack(westCtx, 38, 56, {name = "VegStall", style = "counter", goods = RGB(96,140,60), tank = true})
-            tinShack(westCtx, -56, -38, {name = "WestShack", style = "closed", tank = true, laundry = true})
+            westCtx.zone = 1
+            WorldHooks.crateKiosk(westCtx, -56, -38, VehicleFactory)
             twoStorey(westCtx, 56, 78, {name = "WestHouse"})
             tinShack(westCtx, -78, -56, {name = "ScrapStall", style = "counter", goods = RGB(110,110,104), drum = true})
             -- V28: the block is twice as long, so the rows continue to +-220.
@@ -804,6 +776,7 @@ function WorldBuilder.build(Config, VehicleFactory)
             sidewalkBarricade(westCtx, -150)
             sidewalkBarricade(eastCtx, 160)
             sidewalkBarricade(eastCtx, -158)
+            WorldHooks.contractBoard(zoneFolder, cx, W, 1)
             info.mechanicCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, 29), V3(cx, 0.8, 29))
             info.brokerCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, -29), V3(cx, 0.8, -29))
             -- Slow mud on the sidewalks (only four patches; each is one Touched part).
@@ -814,31 +787,37 @@ function WorldBuilder.build(Config, VehicleFactory)
                 table.insert(info.hazards, hz)
             end
         else
-            buildSimpleHome(zoneFolder, cx, W, z)
+            -- Later districts: their own architecture, evolving home, hooks and cameos.
+            ZoneStyles.home(zoneFolder, cx, W, z)
             info.vendorCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, -3.9), V3(cx + W.AlleyBackX + 4, 0.8, 0.5))
+            westCtx.zone, eastCtx.zone = z, z
             local signs = {nil, {"SPICE BAZAAR", "OLD MARKET TAILORS", "SWEETS"}, {"FOOD HUB", "24x7 PHARMACY", "CLOUD KITCHEN"}, {"ELECTRONICS", "CO-WORKING", "BANK"}, {"LUXURY MALL", "JEWELLERS", "PRIVATE CLUB"}}
             local s = signs[z]
-            simpleBlock(westCtx, 6, 32, {sign = s[1]})
-            simpleBlock(westCtx, -32, -6, {sign = "GARAGE", signBg = RGB(40,80,140), signFg = RGB(255,255,255)})
-            simpleBlock(westCtx, 32, 70, {})
-            simpleBlock(westCtx, -70, -32, {sign = "BROKER", signBg = RGB(40,110,70), signFg = RGB(255,255,255)})
-            simpleBlock(westCtx, 70, 120, {})
-            simpleBlock(westCtx, -120, -70, {})
-            simpleBlock(westCtx, 120, 170, {})
-            simpleBlock(westCtx, -170, -120, {})
-            simpleBlock(westCtx, 170, W.PenHalfLength, {})
-            simpleBlock(westCtx, -W.PenHalfLength, -170, {})
-            simpleBlock(eastCtx, -W.PenHalfLength, -160, {})
-            simpleBlock(eastCtx, -160, -94, {})
-            if nextName then gate(eastCtx, -94, -76, {sign = gateSign}) else simpleBlock(eastCtx, -94, -76, {}) end
-            simpleBlock(eastCtx, -76, -36, {sign = s[2]})
-            simpleBlock(eastCtx, -36, -10, {})
-            simpleBlock(eastCtx, -10, 16, {sign = s[3]})
-            simpleBlock(eastCtx, 16, 44, {})
-            simpleBlock(eastCtx, 44, 76, {})
-            simpleBlock(eastCtx, 76, 130, {})
-            simpleBlock(eastCtx, 130, 180, {})
-            simpleBlock(eastCtx, 180, W.PenHalfLength, {})
+            local v = 0
+            local function build(ctx, w0, w1, opts) v += 1 return ZoneStyles.building(ctx, w0, w1, v, opts) end
+            build(westCtx, 6, 32, {sign = s[1]})
+            build(westCtx, -32, -6, {sign = "GARAGE"})
+            WorldHooks.crateKiosk(westCtx, 32, 70, VehicleFactory)
+            build(westCtx, -70, -32, {sign = "BROKER"})
+            if z == 5 then WorldHooks.royalGarage(westCtx, 70, 120, VehicleFactory) else build(westCtx, 70, 120, {}) end
+            if z == 2 then WorldHooks.blackMarket(westCtx, -120, -70) else build(westCtx, -120, -70, {}) end
+            build(westCtx, 120, 170, {})
+            build(westCtx, -170, -120, {})
+            build(westCtx, 170, W.PenHalfLength, {})
+            build(westCtx, -W.PenHalfLength, -170, {})
+            build(eastCtx, -W.PenHalfLength, -160, {})
+            build(eastCtx, -160, -94, {})
+            if nextName then gate(eastCtx, -94, -76, {sign = gateSign}) else build(eastCtx, -94, -76, {}) end
+            build(eastCtx, -76, -36, {sign = s[2]})
+            build(eastCtx, -36, -10, {})
+            ZoneStyles.landmark(eastCtx, -10, 16)
+            build(eastCtx, 16, 44, {sign = s[3]})
+            build(eastCtx, 44, 76, {})
+            build(eastCtx, 76, 130, {})
+            build(eastCtx, 130, 180, {})
+            build(eastCtx, 180, W.PenHalfLength, {})
+            WorldHooks.contractBoard(zoneFolder, cx, W, z)
+            WorldHooks.cameos(zoneFolder, cx, W, z)
             info.mechanicCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, -12), V3(cx, 0.8, -12))
             info.brokerCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, -40), V3(cx, 0.8, -40))
         end
@@ -858,6 +837,7 @@ function WorldBuilder.build(Config, VehicleFactory)
         local spawnPos = V3(cx + W.HomeBackX + W.HomeSpawnBack, 4.0, W.HomeSpawnZ)
         info.homeSpawn = CFrame.lookAt(spawnPos, spawnPos + V3(1, 0, 0))
     end
+    WorldConnectors.build(World, W)
     return layout
 end
 

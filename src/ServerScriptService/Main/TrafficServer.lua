@@ -8,6 +8,9 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local WorldLayout = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("WorldLayout"))
+
 local TrafficServer = {}
 
 function TrafficServer.start(opts)
@@ -55,7 +58,10 @@ function TrafficServer.start(opts)
                 idleTime[z] = 0
                 sim:step(dt, list.focus)
                 local now = workspace:GetServerTimeNow()
-                if not nextTrain[z] then nextTrain[z] = now + TR.FirstDelay + TR.WarnTime end
+                -- Only the district whose central hazard is the railway gets trains.
+                if WorldLayout.hazardKind(z) ~= "train" then
+                    nextTrain[z] = math.huge
+                elseif not nextTrain[z] then nextTrain[z] = now + TR.FirstDelay + TR.WarnTime end
                 if now >= nextTrain[z] - TR.WarnTime then
                     trainId += 1
                     local train = {id = trainId, zone = z, start = nextTrain[z], dir = trainRng:NextNumber() < 0.5 and -1 or 1,
@@ -101,6 +107,22 @@ function TrafficServer.start(opts)
         local z, root = opts.zoneOfPlayer(plr)
         local sim = z and sims[z]
         if not sim or type(vehicleId) ~= "number" then return end
+        local hazard = WorldLayout.HazardByHitId[vehicleId]
+        if hazard then
+            -- River / crane / laser / fountain: re-evaluate the shared hazard function around now
+            -- (a little in the past too, for latency) with a small spatial tolerance.
+            if WorldLayout.hazardKind(z) ~= hazard then return end
+            local now = workspace:GetServerTimeNow()
+            local pos = root.Position
+            local r = math.max(0.9, (plr.Character and plr.Character:GetAttribute("RideHalfWidth")) or 0)
+            for _, back in ipairs({0, 0.2, 0.4, 0.6}) do
+                if WorldLayout.isDanger(z, W, pos.X - W.ZoneCenters[z], pos.Z, pos.Y, pos.Y - 3, now - back, r, 1.5) then
+                    opts.onHit(plr, hazard)
+                    return
+                end
+            end
+            return
+        end
         if vehicleId == -1 then
             -- Hit by the train: check it is really passing next to the player.
             local train = trains[z]

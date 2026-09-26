@@ -69,6 +69,7 @@ SIT.runClient("Client")
 SIT.runClient("TrafficClient")
 SIT.runClient("VehicleRider")
 SIT.runClient("Weather")
+SIT.runClient("HazardClient")
 runDelayed(2)
 
 local function frames(n, onFrame)
@@ -225,11 +226,12 @@ check(sawCrash and sawAngle, "a staged accident appears (vehicle turned across i
 check(sawSolid, "stopped wrecks/queues become solid obstacles on the client")
 check(sawSmoke, "wreck smokes")
 -- 7) The train: signals + timetable, then it blasts through; standing on the rails is fatal.
-root.CFrame = CFrame.new(W.ZoneCenters[1] - 30, 3.8, 0)
+-- (World branch: the train now runs through district 2; district 1 has the river crossing.)
+root.CFrame = CFrame.new(W.ZoneCenters[2] - 30, 3.8, 0)
 local trainEvt = nil
 frames(60 * 90, function() trainEvt = lastEvent("TrainState") return trainEvt ~= nil and trainEvt[1].start > simTime end)
 check(trainEvt and trainEvt[1].speed > 150 and trainEvt[1].length > 100, "a commuter train is scheduled (" .. tostring(trainEvt and math.floor(trainEvt[1].speed)) .. " studs/s)")
-root.CFrame = CFrame.new(W.ZoneCenters[1] + 0.5, 3.8, 0) -- stand between the rails
+root.CFrame = CFrame.new(W.ZoneCenters[2] + 0.5, 3.8, 0) -- stand between the rails
 local brokenBefore = #clientEvents
 local sawTrain, sawLamp = false, false
 local trainHit = false
@@ -244,7 +246,7 @@ frames(60 * 12, function()
         local n = 0 for _, d in ipairs(tm:GetChildren()) do if d.Name == "RoofRider" then n += 1 end end
         riders = math.max(riders, n)
     end
-    for _, d in ipairs(workspace.SIT_World.Zone_1:GetChildren()) do if d.Name == "RailSignalLamp" and d.Material.Name == "Neon" then sawLamp = true end end
+    for _, d in ipairs(workspace.SIT_World.Zone_2:GetChildren()) do if d.Name == "RailSignalLamp" and d.Material.Name == "Neon" then sawLamp = true end end
     return trainHit
 end)
 check(sawLamp, "rail signals flash before the train")
@@ -253,6 +255,49 @@ check(trainHit, "standing on the rails gets you hit by the train")
 runDelayed(1)
 check((root.Position - home.Position).Magnitude < 0.01, "train hit sends you back to the starter room")
 check(riders >= 12, riders .. " passengers ride on the train roof")
+
+-- 8) District 1 river crossing: the client renders the planks; falling into the water is a hit
+--    (id -2) that the server re-validates with the same deterministic WorldLayout functions.
+do
+    local WL = require(RS.Shared.WorldLayout)
+    check(WL.hazardKind(1) == "river" and WL.hazardKind(2) == "train", "district 1 = river crossing, district 2 = train")
+    root.CFrame = CFrame.new(W.ZoneCenters[1] - 30, 3.8, 0)
+    frames(60 * 3) -- past the server's 2 s hit cooldown from the train
+    local hz = workspace:FindFirstChild("SIT_Hazards")
+    local planks = 0
+    if hz then for _, d in ipairs(hz:GetChildren()) do if d.Name == "Plank" and d.CanCollide then planks += 1 end end end
+    check(planks >= 20, "river planks rendered and collidable (" .. planks .. ")")
+    check(workspace.SIT_World.Zone_1:FindFirstChild("Water", true) ~= nil and workspace.SIT_World.Zone_1:FindFirstChild("RailSignalLamp") == nil, "district 1 has water, no rails")
+    local riverHit = false
+    local oldF = hitRemote.__onFireServer
+    hitRemote.__onFireServer = function(id, ...) if id == -2 then riverHit = true end return oldF(id, ...) end
+    root.CFrame = CFrame.new(W.ZoneCenters[1], WL.River.WaterY - 2.5, 3) -- in the channel, below the fall line
+    frames(30, function() return riverHit end)
+    check(riverHit, "falling into the river reports a hit (-2)")
+    runDelayed(simTime + 5)
+    check((root.Position - home.Position).Magnitude < 0.01, "river fall sends you back to the starter room")
+    hitRemote.__onFireServer = oldF
+    -- A forged hazard id from the wrong district is ignored by the server.
+    root.CFrame = CFrame.new(W.ZoneCenters[1] - 30, 3.8, 0)
+    frames(2)
+    remotes.TrafficHit.OnServerEvent:Fire(plr, -4)
+    runDelayed(simTime + 5)
+    check((root.Position - home.Position).Magnitude > 5, "forged laser hit in district 1 is rejected")
+    -- Each moving hazard has both safe and dangerous moments at a fixed point on its path.
+    local probes = {
+        [3] = function() local c = WL.cranes(W)[1] local x, z = WL.craneLoad(c, 0) return x, z end,
+        [4] = function() local sg = WL.laserSegments(W)[1] return sg.x, (sg.z0 + sg.z1) / 2 end,
+        [5] = function() local j = WL.fountainJets(W)[1] return j.x, j.z end,
+    }
+    for z = 3, 5 do
+        local lx, lz = probes[z]()
+        local safe, danger = 0, 0
+        for i = 0, 600 do
+            if WL.isDanger(z, W, lx, lz, 3, 0, i * 0.05, 0.9, 0) then danger += 1 else safe += 1 end
+        end
+        check(danger > 0 and safe > 0, WL.hazardKind(z) .. " hazard alternates safe/dangerous at one spot (" .. danger .. " danger / " .. safe .. " safe of 601)")
+    end
+end
 
 local horns = 0
 for _, inst in ipairs(mock.allInstances) do if inst.ClassName == "Sound" and inst.Name == "Horn" then horns += 1 end end
