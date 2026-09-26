@@ -29,10 +29,15 @@ grep -q "ALL INTEGRATION CHECKS PASSED" "$TMP/int.txt"
 
 python3 tools/verify_world.py "$TMP/world.txt" > /dev/null
 
+echo "== test mode (one delivery = one rank)"
+python3 tools/make_harness.py tools/tests/testmode.lua "$TMP/tm.lua"
+"$BIN/luau" "$TMP/tm.lua" | tee "$TMP/tm.txt" | grep -v '^OK'
+grep -q "ALL TESTMODE CHECKS PASSED" "$TMP/tm.txt"
+
 echo "== crossing playability probe (informational)"
 python3 tools/make_harness.py tools/tests/crossing_agent.lua "$TMP/cross.lua"
 "$BIN/luau" "$TMP/cross.lua"
 
 echo "== build + validate rbxlx"
-python3 tools/build_rbxlx.py builds/Survive_India_Tycoon_V27_TRAIN_BIKE_DEBT.rbxlx
+python3 tools/build_rbxlx.py builds/Survive_India_Tycoon_V27_1_TESTMODE_MUSICFIX.rbxlx
 echo "ALL CHECKS PASSED"

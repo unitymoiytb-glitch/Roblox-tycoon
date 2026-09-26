@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## V27.1 TEST MODE + MUSIC DIAGNOSTICS
+
+- **Test mode** (`Config.TestMode`, on in this build; set `Enabled = false` before publishing):
+  - each paid delivery promotes you straight to the next rank, for free, all the way to
+    Maharaja (5 deliveries), with a teleport to the matching district
+  - Raju pays 100% of the order
+  - a broken parcel costs no debt
+  - you start with ₹500, enough for the bicycle
+- **Music:** the IDs live in `Config.Music.SoundIds` (volume 0.4). The client preloads the
+  sound and waits for it to load.
+  - If Roblox refuses the asset (not public, not owned by the game's owner, or not shared
+    with the experience), the reason goes to the Output and a "🔇 Music blocked by Roblox"
+    message appears on screen.
+  - No new ID was invented.
+- **Verified offline:** `tools/tests/testmode.lua` (5 deliveries → Maharaja, full payment,
+  teleport to district 5), and the full suite with the normal economy still green.
+  **Not verified:** whether ID 106840103375464 is playable for your account.
+
 ## V27 TRAIN + BIKE + DEBT
 
 **Not done, deliberately:** the customers are *not* a "higher caste". Using caste (a real,

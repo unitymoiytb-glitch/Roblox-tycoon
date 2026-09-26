@@ -12,13 +12,6 @@ local UIRE=Remotes:WaitForChild("UI")
 local ActionRE=Remotes:WaitForChild("Action")
 local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
-local music=SoundService:FindFirstChild("SIT_IndiaMusic") or Instance.new("Sound")
-music.Name="SIT_IndiaMusic"
-music.SoundId="rbxassetid://106840103375464"
-music.Looped=true
-music.Volume=.2 -- leave room for the street horns
-music.Parent=SoundService
-if not music.IsPlaying then pcall(function() music:Play() end) end
 
 local gui=Instance.new("ScreenGui")
 gui.Name="SIT_UI"
@@ -539,6 +532,34 @@ MissionRE.OnClientEvent:Connect(function(kind,data)
         missionTitle.Text="PRODUCT BROKEN 💥"
         missionInfo.Text="You owe Raju ₹"..tostring(data.TotalDebt)..". It comes out of your next payouts."
         showDialog("💥 YOU BROKE THE "..string.upper(tostring(data.Item)),"You got hit and smashed the parcel. Raju wants it paid back.\n\nNew debt: ₹"..tostring(data.Debt).." • Total you owe: ₹"..tostring(data.TotalDebt).."\nIt will be taken from your next payouts.","I'LL PAY IT BACK")
+    end
+end)
+
+-- Background music: try each configured ID, and say clearly why when none can be played.
+local ContentProvider=game:GetService("ContentProvider")
+local music=SoundService:FindFirstChild("SIT_IndiaMusic") or Instance.new("Sound")
+music.Name="SIT_IndiaMusic"
+music.Looped=true
+music.Volume=Config.Music.Volume
+music.Parent=SoundService
+task.spawn(function()
+    local failed={}
+    for _,id in ipairs(Config.Music.SoundIds) do
+        music:Stop()
+        music.SoundId=id
+        local status="?"
+        pcall(function() ContentProvider:PreloadAsync({music},function(_,st) status=tostring(st) end) end)
+        local t0=os.clock()
+        while not music.IsLoaded and os.clock()-t0<8 do task.wait(.25) end
+        if music.IsLoaded and music.TimeLength>0 then
+            music:Play()
+            return
+        end
+        table.insert(failed,id.." ("..status..")")
+        warn("[SIT] Background music "..id.." could not be loaded ("..status.."). Roblox only plays audio that is public, owned by this game's owner, or shared with this experience: Creator Dashboard > Audio > Permissions.")
+    end
+    if #failed>0 then
+        showToast("🔇 Music blocked by Roblox: "..table.concat(failed,", ").." • see Output")
     end
 end)
 

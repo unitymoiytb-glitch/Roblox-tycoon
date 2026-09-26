@@ -4,6 +4,25 @@ Config.GameName = "Survive India Tycoon"
 Config.DataStoreName = "SIT_PlayerData_v3"
 Config.AutosaveSeconds = 60
 Config.StartCash = 0
+
+-- TEST MODE: set Enabled=false before publishing.
+-- Every paid delivery promotes you straight to the next rank (free, no XP/cash/delivery gates),
+-- the vendor pays the full order value, broken parcels cost nothing, and you start with some cash
+-- so the bicycle can be bought right away.
+Config.TestMode = {
+    Enabled = true,
+    RankUpEveryDelivery = true,
+    StartCash = 500,
+}
+
+-- Background music. The first ID that loads is played. An audio asset only plays in your game if
+-- it is public, owned by the game's owner (you / your group), or shared with this experience
+-- (Creator Dashboard > the audio > Permissions). Otherwise Roblox refuses it silently; the client
+-- now prints the reason and shows it on screen.
+Config.Music = {
+    SoundIds = {"rbxassetid://106840103375464"},
+    Volume = 0.4,
+}
 Config.StartXP = 0
 Config.HitCompensationPct = 0.15
 Config.DailyReward = {

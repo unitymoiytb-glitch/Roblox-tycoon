@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 local RS = game:GetService("ReplicatedStorage")
 local Config = require(RS.Shared.Config)
 local W = Config.World
+Config.TestMode.Enabled = false -- this test covers the real economy; tools/tests/testmode.lua covers test mode
 local fails = 0
 local function check(cond, msg) print((cond and "OK   " or "FAIL ") .. msg) if not cond then fails += 1 end end
 

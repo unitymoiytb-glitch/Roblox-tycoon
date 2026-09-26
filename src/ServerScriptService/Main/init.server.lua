@@ -80,6 +80,7 @@ local function mergeProfile(saved)
     p.Passes=type(p.Passes)=="table" and p.Passes or {}
     p.Scrap=tonumber(p.Scrap) or 0 p.Tokens=tonumber(p.Tokens) or 0
     p.Debt=math.max(0,tonumber(p.Debt) or 0)
+    if Config.TestMode.Enabled and type(saved)~="table" then p.Cash=math.max(p.Cash,Config.TestMode.StartCash or 0) end
     return p
 end
 local function save(plr)
@@ -341,7 +342,7 @@ local function onTrafficHit(plr)
     local p0=profiles[plr]
     if mission and p0 and mission.stage=="drop" then
         -- The parcel is smashed: the vendor wants it paid back.
-        local debt=math.floor((mission.potential or 0)*Config.Delivery.BrokenDebtPct)
+        local debt=Config.TestMode.Enabled and 0 or math.floor((mission.potential or 0)*Config.Delivery.BrokenDebtPct)
         p0.Debt=(p0.Debt or 0)+debt
         activeMissions[plr]=nil
         if mission.customer then mission.customer:Destroy() mission.customer=nil end
@@ -453,6 +454,8 @@ end
 local function businessIncome(p) local t=0 for _,b in ipairs(Config.Businesses) do if p.Businesses[b.Id] then t+=b.Income end end return t end
 task.spawn(function() while true do task.wait(10) for plr,p in pairs(profiles) do local inc=businessIncome(p) if inc>0 then addCash(plr,inc*10,"passive businesses") end end end end)
 
+local promote -- defined with the rank code below
+
 -- Rich customers: they take the parcel, sneer, and never pay. Fictional wealth/status only.
 local CUSTOMERS={
     {Title="💰 Rich Customer",Shirt=Color3.fromRGB(236,236,230)},
@@ -525,7 +528,8 @@ end
 local function payAtVendor(plr,m)
     local p=profiles[plr]
     local bonus=math.floor(m.traveled*.018*rankData(p).Mult)
-    local gross=math.floor(m.potential*Config.Delivery.PlayerShare)+bonus
+    local share=Config.TestMode.Enabled and 1 or Config.Delivery.PlayerShare
+    local gross=math.floor(m.potential*share)+bonus
     local repay=math.min(p.Debt or 0,math.floor(gross*Config.Delivery.DebtRepayPct))
     p.Debt=(p.Debt or 0)-repay
     local net=gross-repay
@@ -539,6 +543,10 @@ local function payAtVendor(plr,m)
     elseif p.TotalDeliveries==4 then UIRE:FireClient(plr,"MILESTONE",{Title="BUSINESS UNLOCKED",Text="The Street Broker will finally talk to you",Icon="💼"})
     elseif p.TotalDeliveries==5 then UIRE:FireClient(plr,"MILESTONE",{Title="RISKIER CARGO",Text="Cheap Parcel contracts now pay more",Icon="⚠️"})
     elseif p.TotalDeliveries==8 then UIRE:FireClient(plr,"MILESTONE",{Title="YOU'RE GETTING CLOSE",Text="4 more deliveries until the next district",Icon="🔥"}) end
+    -- Test mode: every paid delivery is an instant, free promotion to the next rank.
+    if Config.TestMode.Enabled and Config.TestMode.RankUpEveryDelivery and Config.Ranks[p.Rank+1] then
+        task.delay(1.2,function() if plr.Parent and profiles[plr]==p and Config.Ranks[p.Rank+1] then promote(plr,true) end end)
+    end
 end
 
 RunService.Heartbeat:Connect(function()
@@ -561,14 +569,11 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-local function tryRankUp(plr)
+promote=function(plr,free)
     local p=profiles[plr] if not p then return end local nr=Config.Ranks[p.Rank+1]
-    if not nr then sync(plr,"Already max rank") return end
-    if (nr.RebirthsRequired or 0)>p.Rebirths then sync(plr,"Need "..nr.RebirthsRequired.." rebirths") return end
-    if p.TotalDeliveries<(nr.Deliveries or 0) then sync(plr,"Need "..nr.Deliveries.." total deliveries") return end
-    if p.XP<nr.XP then sync(plr,"Need "..nr.XP.." XP") return end
-    if p.Cash<nr.Price then sync(plr,"Need ₹"..fmt(nr.Price)) return end
-    p.Cash-=nr.Price p.Rank+=1 p.Vehicle=nr.Vehicle p.OwnedVehicles[nr.Vehicle]=true applyVehicleVisual(plr)
+    if not nr then return end
+    if not free then p.Cash-=nr.Price end
+    p.Rank+=1 p.Vehicle=nr.Vehicle p.OwnedVehicles[nr.Vehicle]=true applyVehicleVisual(plr)
     applyMovement(plr)
     sync(plr,"RANK UP → "..nr.Name) refreshLook(plr)
     -- Districts are sealed blocks, so a promotion moves the player into the next one.
@@ -578,6 +583,16 @@ local function tryRankUp(plr)
         teleportHome(plr,newZone)
         UIRE:FireClient(plr,"MILESTONE",{Title="WELCOME TO "..zoneNames[newZone],Text="You are now a "..nr.Name..". Find this district's vendor.",Icon="🏙"})
     end)
+end
+
+local function tryRankUp(plr)
+    local p=profiles[plr] if not p then return end local nr=Config.Ranks[p.Rank+1]
+    if not nr then sync(plr,"Already max rank") return end
+    if (nr.RebirthsRequired or 0)>p.Rebirths then sync(plr,"Need "..nr.RebirthsRequired.." rebirths") return end
+    if p.TotalDeliveries<(nr.Deliveries or 0) then sync(plr,"Need "..nr.Deliveries.." total deliveries") return end
+    if p.XP<nr.XP then sync(plr,"Need "..nr.XP.." XP") return end
+    if p.Cash<nr.Price then sync(plr,"Need ₹"..fmt(nr.Price)) return end
+    promote(plr,false)
 end
 
 ActionRE.OnServerEvent:Connect(function(plr,action,arg)

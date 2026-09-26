@@ -4,7 +4,7 @@ Roblox delivery / progression tycoon. Start broke in a tin shack, take jobs from
 cross dangerous traffic to deliver, earn ₹ + XP, buy mobility and businesses, rank up
 (Street Runner → Courier → Delivery Hustler → Trader → Business Boss → Maharaja).
 
-**Current build:** `builds/Survive_India_Tycoon_V27_TRAIN_BIKE_DEBT.rbxlx`. Open it in Roblox Studio and press Play.
+**Current build:** `builds/Survive_India_Tycoon_V27_1_TESTMODE_MUSICFIX.rbxlx`. Open it in Roblox Studio and press Play.
 The world is generated at runtime by `ServerScriptService/Main`, so edit mode shows only the spawn.
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in V26 and what was / was not verified.
