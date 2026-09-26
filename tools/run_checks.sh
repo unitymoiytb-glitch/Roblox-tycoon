@@ -39,5 +39,5 @@ python3 tools/make_harness.py tools/tests/crossing_agent.lua "$TMP/cross.lua"
 "$BIN/luau" "$TMP/cross.lua"
 
 echo "== build + validate rbxlx"
-python3 tools/build_rbxlx.py builds/Survive_India_Tycoon_V27_1_TESTMODE_MUSICFIX.rbxlx
+python3 tools/build_rbxlx.py builds/Survive_India_Tycoon_V28_PROTOTYPE.rbxlx
 echo "ALL CHECKS PASSED"

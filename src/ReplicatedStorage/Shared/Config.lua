@@ -10,7 +10,7 @@ Config.StartCash = 0
 -- the vendor pays the full order value, broken parcels cost nothing, and you start with some cash
 -- so the bicycle can be bought right away.
 Config.TestMode = {
-    Enabled = true,
+    Enabled = false,
     RankUpEveryDelivery = true,
     StartCash = 500,
 }
@@ -19,9 +19,17 @@ Config.TestMode = {
 -- it is public, owned by the game's owner (you / your group), or shared with this experience
 -- (Creator Dashboard > the audio > Permissions). Otherwise Roblox refuses it silently; the client
 -- now prints the reason and shows it on screen.
+--
+-- HOW TO ADD INDIAN MUSIC (Roblox's licensed library works in every game, no permission needed):
+--   Studio > View > Toolbox > Audio tab > search "sitar", "bollywood", "tabla", "bhangra", "raga"
+--   > right-click a track > Copy Asset ID > paste it below as "rbxassetid://<id>".
+-- Tracks play one after another (shuffled) with a short crossfade.
 Config.Music = {
-    SoundIds = {"rbxassetid://106840103375464"},
+    SoundIds = {
+        -- "rbxassetid://PASTE_ID_HERE",
+    },
     Volume = 0.4,
+    Shuffle = true,
 }
 Config.StartXP = 0
 Config.HitCompensationPct = 0.15
@@ -84,11 +92,11 @@ Config.DeliveryItems = {
 Config.Vehicles = {
     Feet={Speed=16, Price=0, UnlockNPC="Mechanic"},
     Bicycle={Speed=26, Jump=60, Price=350, UnlockNPC="Mechanic"},
-    Hoverboard={Speed=28, Price=900, UnlockNPC="Mechanic"},
-    ["Rusty Scooter"]={Speed=31, Price=6500, UnlockNPC="Mechanic"},
-    ["Tuk-Tuk"]={Speed=34, Price=28000, UnlockNPC="Mechanic"},
-    SUV={Speed=38, Price=240000, UnlockNPC="Mechanic"},
-    ["Mega 4x4"]={Speed=45, Price=1500000, UnlockNPC="Mechanic"}
+    Hoverboard={Speed=28, Jump=72, Price=900, UnlockNPC="Mechanic"},
+    ["Rusty Scooter"]={Speed=31, Jump=40, Price=6500, UnlockNPC="Mechanic"},
+    ["Tuk-Tuk"]={Speed=34, Jump=30, Price=28000, UnlockNPC="Mechanic"},
+    SUV={Speed=38, Jump=35, Price=240000, UnlockNPC="Mechanic"},
+    ["Mega 4x4"]={Speed=45, Jump=45, Price=1500000, UnlockNPC="Mechanic"}
 }
 
 Config.Businesses = {
@@ -127,20 +135,22 @@ Config.World = {
     LaneDirections = {-1,-1,1,1},    -- -1 = travels toward -Z, 1 = toward +Z (keep-left traffic)
     RoadHalfWidth = 22,              -- asphalt from -22 to +22 (rail corridor -6..6 in the middle)
     SidewalkOuter = 28,              -- sidewalks from +-22 to +-28
-    PenHalfLength = 110,             -- walkable Z range is -110..110 (sealed ends)
+    PenHalfLength = 220,             -- walkable Z range is -220..220 (sealed ends); V27 was 110
     AlleyHalfWidth = 6,              -- home alley opening in the west row (Z -6..6)
     AlleyBackX = -42,                -- alley runs from X -28 to -42
     HomeBackX = -56,                 -- starter room interior X -56..-42, Z -9..9
     HomeHalfWidth = 9,
     HomeSpawnBack = 5.5,             -- spawn this far in front of the room's back wall...
     HomeSpawnZ = -0.8,               -- ...slightly left of centre, facing the open front (+X)
-    TrafficHalfLength = 175,         -- vehicles live on Z -175..175 (spawn/despawn inside the end tunnels)
+    TrafficHalfLength = 285,         -- vehicles live on Z -285..285 (spawn/despawn inside the end tunnels)
     BoundsHeight = 60,               -- invisible walls are far higher than any jump
 }
 
 Config.Traffic = {
     SnapshotRate = 0.1,              -- seconds between server snapshots
-    MaxVehiclesPerZone = 48,
+    MaxVehiclesPerZone = 80,
+    SnapshotRadius = 190,            -- each player only receives vehicles within this Z distance
+    SnapshotMaxVehicles = 70,        -- keeps one snapshot under the UnreliableRemoteEvent size limit
     SpeedRerollMin = 0.8, SpeedRerollMax = 2.5,
     -- Speed hierarchy (studs/s): tuk-tuk < scooter < motorbike < car. Player walks at 16.
     Kinds = {
@@ -165,6 +175,23 @@ Config.Traffic = {
     HornSoundId = "rbxassetid://17737027571", -- the horn used by earlier builds
 }
 
+-- Brown monsoon rain: 1 minute every 15 minutes (first shower 2 minutes after the server starts).
+-- The ground turns slippery (sluggish acceleration, you keep sliding) and orders pay x3.
+Config.Weather = {
+    Interval = 15 * 60,
+    Duration = 60,
+    FirstDelay = 120,
+    PriceMultiplier = 3,
+    Traction = 1.6,        -- lower = more slippery (how fast your movement follows your input)
+}
+
+-- Horns: V27 honked twice as often.
+Config.Horns = {
+    AmbientMin = 7, AmbientMax = 17,  -- seconds between random street horns
+    BlockedChance = 0.15,             -- chance a stuck vehicle honks when checked
+    MinGap = 1.8,                     -- never two horns closer than this
+}
+
 -- Commuter train on the railway between the two carriageways. Clients render it from the
 -- server's schedule (server time), so it is perfectly smooth and needs no replication.
 Config.Train = {
@@ -178,7 +205,7 @@ Config.Train = {
 -- Delivery economy: the customer never pays you. You go back to the vendor, who keeps a cut.
 -- Break the parcel (get hit while carrying it) and you owe the vendor for it.
 Config.Delivery = {
-    PlayerShare = 0.7,     -- share of the order value the vendor pays you
+    PlayerShare = 1.0,     -- share of the order value the vendor pays you (V27 had a 0.7 cut)
     BrokenDebtPct = 0.4,   -- debt added when the parcel is destroyed
     DebtRepayPct = 1.0,    -- share of each payout the vendor keeps until the debt is cleared
 }

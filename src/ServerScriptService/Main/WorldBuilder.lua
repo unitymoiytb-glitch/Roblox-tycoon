@@ -377,7 +377,7 @@ local function buildRoad(folder, cx, W, z, detail)
         P(folder, "RailKerb", V3(0.4, 0.62, railLen), CFrame.new(cx + s * (mh - 0.2), 0.31, 0), z <= 2 and RGB(214,184,60) or RGB(230,230,226), M.Concrete)
         P(folder, "Rail", V3(0.3, 0.3, railLen), CFrame.new(cx + s * 2.4, 0.78, 0), RGB(150,150,156), M.Metal)
     end
-    local sleeperStep = detail and 3.5 or 7
+    local sleeperStep = detail and 5 or 10
     for zz = -W.PenHalfLength - 8, W.PenHalfLength + 8, sleeperStep do
         P(folder, "Sleeper", V3(7.2, 0.22, 0.9), CFrame.new(cx, 0.6, zz), RGB(120,114,104), M.Concrete)
     end
@@ -389,7 +389,7 @@ local function buildRoad(folder, cx, W, z, detail)
         lamp.CastShadow = false
         signBoard(folder, "TrainWarning", V3(3.2, 1.2, 0.12), V3(x, 5.0, sp[2] + 0.2), V3(-sp[1], 0, 0), "⚠ TRAINS", RGB(236,196,40), RGB(20,20,20))
     end
-    local step = detail and 13 or 26
+    local step = detail and 16 or 32
     for _, dx in ipairs({-(mh + W.LaneWidth), mh + W.LaneWidth}) do
         for zz = -W.PenHalfLength - 30, W.PenHalfLength + 30, step do
             P(folder, "LaneDash", V3(0.35, 0.05, 5), CFrame.new(cx + dx, 0.22, zz), RGB(206,200,184), M.SmoothPlastic)
@@ -437,6 +437,8 @@ local function buildBackdrop(folder, cx, z, rng)
     local specs = {
         {60, 26, -58, 22, 40}, {72, 34, 12, 18, 28}, {62, 22, 72, 24, 40}, {100, 44, -22, 16, 18},
         {-72, 22, -52, 20, 44}, {-80, 30, 40, 20, 30}, {-66, 18, 92, 14, 20}, {-104, 38, -4, 16, 18},
+        {66, 30, 150, 22, 44}, {74, 24, -150, 20, 40}, {-76, 26, 160, 20, 40}, {-80, 34, -140, 18, 34},
+        {90, 40, 205, 18, 22}, {-96, 42, -200, 18, 22},
     }
     for _, s in ipairs(specs) do
         local x, h, zz, w, d = s[1], s[2], s[3], s[4], s[5]
@@ -625,7 +627,7 @@ end
 local function buildStreetWires(folder, cx, W)
     local m = Instance.new("Model") m.Name = "StreetWires" m.Parent = folder
     local xw, xe = cx - W.SidewalkOuter - 0.8, cx + W.SidewalkOuter + 0.8
-    local pairsZ = {{-44, -30}, {44, 30}, {88, 72}, {-88, -74}}
+    local pairsZ = {{-44, -30}, {44, 30}, {88, 72}, {-88, -74}, {140, 126}, {-140, -126}, {196, 182}, {-196, -182}}
     for _, pz in ipairs(pairsZ) do
         vcyl(m, "Pole", 13, 0.5, xw, 6.5, pz[1], RGB(110,104,96), M.Concrete)
         vcyl(m, "Pole", 13, 0.5, xe, 6.5, pz[2], RGB(110,104,96), M.Concrete)
@@ -709,11 +711,11 @@ function WorldBuilder.build(Config, VehicleFactory)
     World.Name = "SIT_World"
     World.Parent = workspace
 
-    local ground = P(World, "Ground", V3(1000, 2, 700), CFrame.new(0, -1, 0), RGB(104,88,66), M.Ground, true)
+    local ground = P(World, "Ground", V3(1000, 2, 900), CFrame.new(0, -1, 0), RGB(104,88,66), M.Ground, true)
     ground.CastShadow = false
 
     local layout = {World = World, zones = {}}
-    local dropZs = {-94, -58, -22, 24, 60, 94}
+    local dropZs = {-196, -138, -67, -26, 23, 81, 140, 196}
 
     for z, cx in ipairs(W.ZoneCenters) do
         local rng = Random.new(1000 + z * 97)
@@ -754,31 +756,58 @@ function WorldBuilder.build(Config, VehicleFactory)
             tinShack(westCtx, -56, -38, {name = "WestShack", style = "closed", tank = true, laundry = true})
             twoStorey(westCtx, 56, 78, {name = "WestHouse"})
             tinShack(westCtx, -78, -56, {name = "ScrapStall", style = "counter", goods = RGB(110,110,104), drum = true})
-            compound(westCtx, 78, W.PenHalfLength, {})
-            compound(westCtx, -W.PenHalfLength, -78, {})
+            -- V28: the block is twice as long, so the rows continue to +-220.
+            tinShack(westCtx, 78, 96, {name = "WestShack", style = "closed", tank = true, laundry = true})
+            twoStorey(westCtx, 96, 116, {name = "WestHouse", paint = C.paint[5]})
+            tinShack(westCtx, 116, 134, {name = "SpiceStall", style = "counter", goods = RGB(200,90,40), awning = RGB(214,160,52)})
+            compound(westCtx, 134, 150, {})
+            tinShack(westCtx, 150, 168, {name = "WestShack", style = "closed", drum = true})
+            twoStorey(westCtx, 168, 190, {name = "WestHouse", paint = C.paint[2]})
+            compound(westCtx, 190, W.PenHalfLength, {})
+            tinShack(westCtx, -96, -78, {name = "WestShack", style = "closed", laundry = true})
+            tinShack(westCtx, -116, -96, {name = "ClothStall", style = "counter", goods = RGB(170,60,140), awning = RGB(62,98,70)})
+            twoStorey(westCtx, -134, -116, {name = "WestHouse", paint = C.paint[3]})
+            compound(westCtx, -150, -134, {})
+            tinShack(westCtx, -168, -150, {name = "WestShack", style = "closed", drum = true, tank = true})
+            tinShack(westCtx, -190, -168, {name = "PotStall", style = "counter", goods = RGB(120,120,126)})
+            compound(westCtx, -W.PenHalfLength, -190, {})
             -- EAST ROW (delivery side)
-            compound(eastCtx, -W.PenHalfLength, -100, {tree = false})
-            tinShack(eastCtx, -100, -84, {name = "DropShack", style = "closed", door = RGB(60,110,150), laundry = true})
-            gate(eastCtx, -84, -66, {sign = gateSign})
-            tinShack(eastCtx, -66, -50, {name = "DropShack", style = "closed", door = RGB(150,70,60), tank = true})
-            tinShack(eastCtx, -50, -32, {name = "FruitStall", style = "counter", goods = RGB(220,150,40), awning = RGB(230,164,40)})
-            twoStorey(eastCtx, -32, -12, {name = "DropHouse", paint = C.paint[1]})
+            compound(eastCtx, -W.PenHalfLength, -206, {tree = false})
+            tinShack(eastCtx, -206, -186, {name = "DropShack", style = "closed", door = RGB(60,110,150), laundry = true})
+            tinShack(eastCtx, -186, -166, {name = "TeaCorner", style = "counter", goods = RGB(180,140,90), awning = RGB(196,60,52)})
+            twoStorey(eastCtx, -166, -146, {name = "EastHouse", paint = C.paint[6]})
+            tinShack(eastCtx, -146, -130, {name = "DropShack", style = "closed", door = RGB(120,60,120), tank = true})
+            tinShack(eastCtx, -130, -112, {name = "BangleStall", style = "counter", goods = RGB(230,190,60)})
+            tinShack(eastCtx, -112, -94, {name = "EastShack", style = "closed", laundry = true})
+            gate(eastCtx, -94, -76, {sign = gateSign})
+            tinShack(eastCtx, -76, -58, {name = "DropShack", style = "closed", door = RGB(150,70,60), tank = true})
+            tinShack(eastCtx, -58, -40, {name = "FruitStall", style = "counter", goods = RGB(220,150,40), awning = RGB(230,164,40)})
+            twoStorey(eastCtx, -40, -12, {name = "DropHouse", paint = C.paint[1]})
             landmark(eastCtx, -12, 12, {sign = "LUCKY KIRANA STORE"})
             tinShack(eastCtx, 12, 34, {name = "DropShack", style = "closed", door = RGB(70,130,90), laundry = true, drum = true})
             tinShack(eastCtx, 34, 50, {name = "PhoneStall", style = "counter", sign = "MOBILE RECHARGE", signBg = RGB(40,70,160), signFg = RGB(255,255,255), goods = RGB(60,60,64)})
-            twoStorey(eastCtx, 50, 70, {name = "DropHouse", paint = C.paint[4]})
-            tinShack(eastCtx, 70, 86, {name = "EastShack", style = "closed", tank = true})
-            tinShack(eastCtx, 86, 102, {name = "DropShack", style = "closed", door = RGB(170,120,40), laundry = true})
-            compound(eastCtx, 102, W.PenHalfLength, {tree = false})
+            twoStorey(eastCtx, 50, 72, {name = "EastHouse", paint = C.paint[4]})
+            tinShack(eastCtx, 72, 90, {name = "DropShack", style = "closed", door = RGB(170,120,40), laundry = true})
+            tinShack(eastCtx, 90, 110, {name = "SweetStall", style = "counter", sign = "SWEETS", signBg = RGB(230,120,40), signFg = RGB(255,255,255), goods = RGB(236,200,120)})
+            tinShack(eastCtx, 110, 130, {name = "EastShack", style = "closed", tank = true})
+            twoStorey(eastCtx, 130, 150, {name = "DropHouse", paint = C.paint[2]})
+            tinShack(eastCtx, 150, 168, {name = "ScrapStall", style = "counter", goods = RGB(110,110,104), drum = true})
+            tinShack(eastCtx, 168, 186, {name = "EastShack", style = "closed", laundry = true})
+            tinShack(eastCtx, 186, 206, {name = "DropShack", style = "closed", door = RGB(60,130,160), tank = true})
+            compound(eastCtx, 206, W.PenHalfLength, {tree = false})
             -- Sidewalk barricades: walking along a sidewalk means stepping into a live lane.
             sidewalkBarricade(westCtx, 48)
             sidewalkBarricade(westCtx, -48)
             sidewalkBarricade(eastCtx, -41)
             sidewalkBarricade(eastCtx, 42)
+            sidewalkBarricade(westCtx, 150)
+            sidewalkBarricade(westCtx, -150)
+            sidewalkBarricade(eastCtx, 160)
+            sidewalkBarricade(eastCtx, -158)
             info.mechanicCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, 29), V3(cx, 0.8, 29))
             info.brokerCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, -29), V3(cx, 0.8, -29))
             -- Slow mud on the sidewalks (only four patches; each is one Touched part).
-            for _, spec in ipairs({{-1, 64}, {-1, -66}, {1, 8}, {1, -72}}) do
+            for _, spec in ipairs({{-1, 64}, {-1, -66}, {1, 8}, {1, -72}, {-1, 120}, {-1, -176}, {1, 110}, {1, -120}}) do
                 local x = cx + spec[1] * (W.RoadHalfWidth + (W.SidewalkOuter - W.RoadHalfWidth) / 2)
                 local hz = P(zoneFolder, "MuckPatch", V3(4.5, 0.08, 7), CFrame.new(x, 0.83, spec[2]), RGB(82,69,34), M.Mud)
                 hz.CanTouch = true
@@ -793,22 +822,29 @@ function WorldBuilder.build(Config, VehicleFactory)
             simpleBlock(westCtx, -32, -6, {sign = "GARAGE", signBg = RGB(40,80,140), signFg = RGB(255,255,255)})
             simpleBlock(westCtx, 32, 70, {})
             simpleBlock(westCtx, -70, -32, {sign = "BROKER", signBg = RGB(40,110,70), signFg = RGB(255,255,255)})
-            simpleBlock(westCtx, 70, W.PenHalfLength, {})
-            simpleBlock(westCtx, -W.PenHalfLength, -70, {})
-            simpleBlock(eastCtx, -W.PenHalfLength, -84, {})
-            if nextName then gate(eastCtx, -84, -66, {sign = gateSign}) else simpleBlock(eastCtx, -84, -66, {}) end
-            simpleBlock(eastCtx, -66, -36, {sign = s[2]})
+            simpleBlock(westCtx, 70, 120, {})
+            simpleBlock(westCtx, -120, -70, {})
+            simpleBlock(westCtx, 120, 170, {})
+            simpleBlock(westCtx, -170, -120, {})
+            simpleBlock(westCtx, 170, W.PenHalfLength, {})
+            simpleBlock(westCtx, -W.PenHalfLength, -170, {})
+            simpleBlock(eastCtx, -W.PenHalfLength, -160, {})
+            simpleBlock(eastCtx, -160, -94, {})
+            if nextName then gate(eastCtx, -94, -76, {sign = gateSign}) else simpleBlock(eastCtx, -94, -76, {}) end
+            simpleBlock(eastCtx, -76, -36, {sign = s[2]})
             simpleBlock(eastCtx, -36, -10, {})
             simpleBlock(eastCtx, -10, 16, {sign = s[3]})
             simpleBlock(eastCtx, 16, 44, {})
             simpleBlock(eastCtx, 44, 76, {})
-            simpleBlock(eastCtx, 76, W.PenHalfLength, {})
+            simpleBlock(eastCtx, 76, 130, {})
+            simpleBlock(eastCtx, 130, 180, {})
+            simpleBlock(eastCtx, 180, W.PenHalfLength, {})
             info.mechanicCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, -12), V3(cx, 0.8, -12))
             info.brokerCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, -40), V3(cx, 0.8, -40))
         end
 
         if nextName then
-            info.guardCF = CFrame.lookAt(V3(cx + W.SidewalkOuter + 2.4, 0.8, -75), V3(cx, 0.8, -75))
+            info.guardCF = CFrame.lookAt(V3(cx + W.SidewalkOuter + 2.4, 0.8, -85), V3(cx, 0.8, -85))
         end
         -- Delivery drop points: glowing pads on the far sidewalk in front of the east-row doors.
         for i, dz in ipairs(dropZs) do

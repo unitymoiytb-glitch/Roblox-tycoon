@@ -104,7 +104,7 @@ local HORN_VOLUME = {scooter = 0.22, motorbike = 0.26, tuktuk = 0.24, car = 0.34
 
 local function honk(e)
     local now = os.clock()
-    if now - lastHonk < 0.9 or not e.model.Parent then return end
+    if now - lastHonk < Config.Horns.MinGap or not e.model.Parent then return end
     lastHonk = now
     hornIndex = hornIndex % #horns + 1
     local s = horns[hornIndex]
@@ -148,7 +148,6 @@ local function onCrash(e)
     e.smoke = smoke
     -- A couple of angry horns from the traffic that has to stop.
     task.delay(0.35, function() local v = randomVehicleNear(0, 90, function(x) return not x.crashed end) if v then honk(v) end end)
-    task.delay(1.3, function() local v = randomVehicleNear(0, 90, function(x) return not x.crashed end) if v then honk(v) end end)
 end
 
 -- ---------------------------------------------------------------- snapshots
@@ -244,10 +243,12 @@ RunService.RenderStepped:Connect(function(dt)
     if root and hum and hum.Health > 0 and now > hitLock then
         local pos = root.Position
         local feet = pos.Y - (hum.HipHeight + root.Size.Y / 2)
+        -- On a scooter/tuk-tuk/car the player is as wide as the ride.
+        local playerR = math.max(0.9, player.Character:GetAttribute("RideHalfWidth") or 0)
         for id, e in pairs(vehicles) do
             if not e.crashed and e.snapSpeed > 3 then
                 local spec = e.spec
-                if math.abs(pos.X - e.x) < spec.HalfWidth + 0.9 and feet < spec.Top + ROAD_Y then
+                if math.abs(pos.X - e.x) < spec.HalfWidth + playerR and feet < spec.Top + ROAD_Y then
                     local zMin = math.min(e.prevZ, e.z) - spec.Length / 2 - 0.8
                     local zMax = math.max(e.prevZ, e.z) + spec.Length / 2 + 0.8
                     if pos.Z > zMin and pos.Z < zMax then
@@ -264,14 +265,14 @@ RunService.RenderStepped:Connect(function(dt)
 
     -- Street horns: occasional, spatial, never more than ~1 per second.
     if now >= nextAmbientHonk then
-        nextAmbientHonk = now + 3.5 + math.random() * 5
+        nextAmbientHonk = now + Config.Horns.AmbientMin + math.random() * (Config.Horns.AmbientMax - Config.Horns.AmbientMin)
         local e = randomVehicleNear(20, 110, function(x) return not x.crashed and x.snapSpeed > 5 end)
         if e and math.random() < 0.8 then honk(e) end
     end
     if now >= nextBlockedHonk then
         nextBlockedHonk = now + 0.6
         local e = randomVehicleNear(0, 85, function(x) return x.blocked end)
-        if e and math.random() < 0.3 then honk(e) nextBlockedHonk = now + 1.8 + math.random() * 2 end
+        if e and math.random() < Config.Horns.BlockedChance then honk(e) nextBlockedHonk = now + 3.6 + math.random() * 4 end
     end
 end)
 
@@ -445,7 +446,8 @@ RunService.RenderStepped:Connect(function()
         local feet = pos.Y - (hum.HipHeight + root.Size.Y / 2)
         local zMin = math.min(head, tail, prevHead or head) - 0.8
         local zMax = math.max(head, tail, prevHead or head) + 0.8
-        if math.abs(pos.X - cx) < TR.HalfWidth + 0.9 and feet < TR.Height + 1 and pos.Z > zMin and pos.Z < zMax then
+        local playerR = math.max(0.9, player.Character:GetAttribute("RideHalfWidth") or 0)
+        if math.abs(pos.X - cx) < TR.HalfWidth + playerR and feet < TR.Height + 1 and pos.Z > zMin and pos.Z < zMax then
             hitLock = os.clock() + 2.5
             HitRE:FireServer(-1)
             kickCamera()

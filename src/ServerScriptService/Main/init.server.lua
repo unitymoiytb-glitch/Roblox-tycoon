@@ -430,24 +430,89 @@ local function applyMovement(plr)
     hum.JumpPower=v.Jump or 50
 end
 
+-- Weld a VehicleFactory model (built at the origin, wheels on y=0, facing -Z) under the rider.
+-- `seat` is the point in the model that must sit under the player's root; `scale` enlarges it.
+local function weldFactoryVehicle(m,root,char,kind,seed,scale,seat,recolor)
+    local hum=char:FindFirstChildOfClass("Humanoid")
+    local g=-((hum and hum.HipHeight or 2)+root.Size.Y/2)
+    local base=root.CFrame*CFrame.new(-seat.X*scale,g,-seat.Z*scale)
+    local src=VehicleFactory.build(kind,seed,{rider=false})
+    for _,part in ipairs(src:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name~="Root" then
+            local cf=part.CFrame
+            part.Size=part.Size*scale
+            part.Anchored=false part.CanCollide=false part.CanTouch=false part.CanQuery=false part.Massless=true
+            part.CFrame=base*CFrame.new(cf.Position*scale)*cf.Rotation
+            if part.Name=="Glass" or part.Name=="Windshield" then part.Transparency=.45 end
+            if recolor then recolor(part) end
+            local w=Instance.new("WeldConstraint") w.Part0=root w.Part1=part w.Parent=part
+            part.Parent=m
+        end
+    end
+    src:Destroy()
+end
+
+local function buildHoverboard(m,root,char)
+    local hum=char:FindFirstChildOfClass("Humanoid")
+    local g=-((hum and hum.HipHeight or 2)+root.Size.Y/2)
+    local V=Vector3.new
+    weldPart(m,root,V(1.7,0.28,4.8),CFrame.new(0,g+0.45,0),Color3.fromRGB(28,30,36)).Name="Deck"
+    local glow=weldPart(m,root,V(1.4,0.1,4.2),CFrame.new(0,g+0.28,0),Color3.fromRGB(40,200,255)) glow.Material=Enum.Material.Neon glow.Name="UnderGlow"
+    for _,z in ipairs({-2.1,2.1}) do
+        local pad=weldPart(m,root,V(1.2,0.3,0.6),CFrame.new(0,g+0.25,z),Color3.fromRGB(60,64,72)) pad.Name="Thruster"
+        local jet=weldPart(m,root,V(0.8,0.08,0.4),CFrame.new(0,g+0.08,z),Color3.fromRGB(120,230,255)) jet.Material=Enum.Material.Neon jet.Name="Jet"
+    end
+    weldPart(m,root,V(1.72,0.06,0.5),CFrame.new(0,g+0.6,-1.7),Color3.fromRGB(255,170,40)).Name="Stripe"
+    weldPart(m,root,V(1.72,0.06,0.5),CFrame.new(0,g+0.6,1.7),Color3.fromRGB(255,170,40)).Name="Stripe"
+end
+
+-- Every ride is a real model now. Pose tells VehicleRider.client.lua how to seat the player;
+-- RideHalfWidth widens the traffic hit test so a car-sized ride is hit like a car.
+local RIDES={
+    Bicycle={Pose="pedal",HalfWidth=0.9},
+    Hoverboard={Pose="stand",HalfWidth=1.0},
+    ["Rusty Scooter"]={Pose="bars",HalfWidth=1.3},
+    ["Tuk-Tuk"]={Pose="wheel",HalfWidth=3.0},
+    SUV={Pose="wheel",HalfWidth=4.3},
+    ["Mega 4x4"]={Pose="wheel",HalfWidth=5.2},
+}
+
 local function applyVehicleVisual(plr)
-    clearVehicleVisual(plr) local p=profiles[plr] local char=plr.Character if not p or not char or p.Vehicle=="Feet" then return end
+    clearVehicleVisual(plr) local p=profiles[plr] local char=plr.Character
+    if char then char:SetAttribute("RideHalfWidth",nil) end
+    if not p or not char or p.Vehicle=="Feet" then return end
     local root=char:FindFirstChild("HumanoidRootPart") if not root then return end
     local m=Instance.new("Model") m.Name="Ride_"..p.Vehicle m.Parent=char vehicleVisuals[plr]=m
+    local ride=RIDES[p.Vehicle]
+    if ride then m:SetAttribute("Pose",ride.Pose) char:SetAttribute("RideHalfWidth",ride.HalfWidth) end
     if p.Vehicle=="Bicycle" then
         buildBicycle(m,root,char)
     elseif p.Vehicle=="Hoverboard" then
-        weldPart(m,root,Vector3.new(4,.35,1.6),CFrame.new(0,-2.7,.1),Color3.fromRGB(35,185,240))
+        buildHoverboard(m,root,char)
     elseif p.Vehicle=="Rusty Scooter" then
-        weldPart(m,root,Vector3.new(2,.6,5),CFrame.new(0,-2.2,.2),(p.ActiveSkin=="Blue Smoke") and Color3.fromRGB(45,125,220) or Color3.fromRGB(125,72,45))
-        weldPart(m,root,Vector3.new(.4,3,.4),CFrame.new(0,-.9,-1.8),Color3.fromRGB(50,50,50))
+        local body=(p.ActiveSkin=="Blue Smoke") and Color3.fromRGB(45,125,220) or Color3.fromRGB(125,72,45)
+        weldFactoryVehicle(m,root,char,"scooter",3,1.1,Vector3.new(0,0,0.95),function(part)
+            if part.Name=="RearBody" or part.Name=="LegShield" then part.Color=body part.Material=Enum.Material.CorrodedMetal end
+        end)
     elseif p.Vehicle=="Tuk-Tuk" then
-        weldPart(m,root,Vector3.new(6,3,7),CFrame.new(0,-.7,1.0),Color3.fromRGB(40,145,85))
-        weldPart(m,root,Vector3.new(6.5,.35,7.3),CFrame.new(0,1.05,1.0),Color3.fromRGB(235,185,40))
-    elseif p.Vehicle=="SUV" or p.Vehicle=="Mega 4x4" then
-        local s=p.Vehicle=="Mega 4x4" and 1.25 or 1
-        weldPart(m,root,Vector3.new(7*s,2.4*s,10*s),CFrame.new(0,-.5,1.2),(p.ActiveSkin=="Royal Chrome" and p.Vehicle=="Mega 4x4") and Color3.fromRGB(210,215,220) or (p.Vehicle=="Mega 4x4" and Color3.fromRGB(20,20,20) or Color3.fromRGB(90,90,105)))
-        weldPart(m,root,Vector3.new(6.2*s,2.2*s,5*s),CFrame.new(0,1.1,1.0),Color3.fromRGB(35,45,55))
+        weldFactoryVehicle(m,root,char,"tuktuk",2,1.15,Vector3.new(0,0,-1.3))
+    elseif p.Vehicle=="SUV" then
+        weldFactoryVehicle(m,root,char,"car",1,1.35,Vector3.new(-1.3,0,-0.4),function(part)
+            if part.Name=="Body" or part.Name=="Roof" or part.Name=="Hood" then part.Color=Color3.fromRGB(70,74,86) end
+        end)
+    elseif p.Vehicle=="Mega 4x4" then
+        local chrome=p.ActiveSkin=="Royal Chrome"
+        weldFactoryVehicle(m,root,char,"car",1,1.6,Vector3.new(-1.3,0,-0.4),function(part)
+            if part.Name=="Body" or part.Name=="Roof" or part.Name=="Hood" then
+                part.Color=chrome and Color3.fromRGB(210,215,220) or Color3.fromRGB(20,20,22)
+                part.Material=chrome and Enum.Material.Foil or Enum.Material.Metal
+            end
+            if part.Name=="Wheel" then part.Size=part.Size*1.25 end
+        end)
+        local hum=char:FindFirstChildOfClass("Humanoid")
+        local g=-((hum and hum.HipHeight or 2)+root.Size.Y/2)
+        local bar=weldPart(m,root,Vector3.new(7,0.35,0.5),CFrame.new(2.1,g+7.9,-1.5),Color3.fromRGB(255,240,200)) bar.Material=Enum.Material.Neon bar.Name="LightBar"
+        weldPart(m,root,Vector3.new(9,1.2,0.6),CFrame.new(2.1,g+2.1,-9.6),Color3.fromRGB(40,40,44)).Name="BullBar"
     end
 end
 
@@ -455,6 +520,33 @@ local function businessIncome(p) local t=0 for _,b in ipairs(Config.Businesses) 
 task.spawn(function() while true do task.wait(10) for plr,p in pairs(profiles) do local inc=businessIncome(p) if inc>0 then addCash(plr,inc*10,"passive businesses") end end end end)
 
 local promote -- defined with the rank code below
+
+-- ---------------------------------------------------------------- brown monsoon rain
+-- Server decides; clients read workspace attributes (SIT_Raining, SIT_RainEnds) to render the
+-- rain, darken the sky and make the ground slippery. Orders placed during rain pay x3.
+local Weather=Config.Weather
+local weatherStart=workspace:GetServerTimeNow()
+local function rainState(now)
+    local t=now-weatherStart-Weather.FirstDelay
+    if t<0 then return false,nil end
+    local phase=t%Weather.Interval
+    if phase<Weather.Duration then return true,now+(Weather.Duration-phase) end
+    return false,nil
+end
+local weatherClock=0
+RunService.Heartbeat:Connect(function(dt)
+    weatherClock+=dt
+    if weatherClock<0.5 then return end
+    weatherClock=0
+    local raining,ends=rainState(workspace:GetServerTimeNow())
+    if raining~=(workspace:GetAttribute("SIT_Raining")==true) then
+        workspace:SetAttribute("SIT_Raining",raining)
+        workspace:SetAttribute("SIT_RainEnds",ends)
+        for plr in pairs(profiles) do
+            UIRE:FireClient(plr,"TOAST",raining and ("🌧 BROWN RAIN! Slippery ground • new orders pay x"..Weather.PriceMultiplier) or "☀ The rain stopped. Orders back to normal.")
+        end
+    end
+end)
 
 -- Rich customers: they take the parcel, sneer, and never pay. Fictional wealth/status only.
 local CUSTOMERS={
@@ -510,12 +602,14 @@ local function startMission(plr,itemName)
     local vendor=vendorModels[z] and vendorModels[z]:FindFirstChild("Torso")
     local dist=vendor and (vendor.Position-dp.Position).Magnitude or 150
     local base=math.max(p.Rank==1 and 55 or 18,math.floor((16+dist*.12)*rankData(p).Mult*(selected.Mult or 1)*(1+p.Rebirths*.08)*((p.Passes and p.Passes.VIPContracts) and 1.20 or 1)))
+    local raining=workspace:GetAttribute("SIT_Raining")==true
+    if raining then base=base*Weather.PriceMultiplier end
     -- The customer waits at their door, just behind the far sidewalk.
     local info=CUSTOMERS[math.random(1,#CUSTOMERS)]
     local doorPos=Vector3.new(zoneCenters[z]+Config.World.SidewalkOuter+2.2,0.8,dp.Position.Z)
     local customer=makeCustomer(CFrame.lookAt(doorPos,doorPos-Vector3.new(1,0,0)),info,z)
     activeMissions[plr]={stage="drop",zone=z,drop=dp,potential=base,traveled=0,lastPos=nil,item=selected.Name,customer=customer,customerTitle=info.Title}
-    MissionRE:FireClient(plr,"START",{Drop=dp,Item=selected.Name,Potential=base,Customer=info.Title,Share=Config.Delivery.PlayerShare})
+    MissionRE:FireClient(plr,"START",{Drop=dp,Item=selected.Name,Potential=base,Customer=info.Title,Share=Config.Delivery.PlayerShare,Rain=raining})
 end
 
 local function removeCustomer(m,delay)

@@ -80,8 +80,8 @@ for step = 1, steps do
         end
     end
     if step % 6 == 0 then
+        maxBytes = math.max(maxBytes, buffer.len(sim:encode(0, T.SnapshotRadius, T.SnapshotMaxVehicles)))
         local buf = sim:encode()
-        maxBytes = math.max(maxBytes, buffer.len(buf))
         local zone, _, list = TrafficSim.decode(buf)
         if zone ~= 1 or #list ~= sim.count then roundtripBad += 1 end
         local k = 1

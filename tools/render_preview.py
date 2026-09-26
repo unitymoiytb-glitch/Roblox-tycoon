@@ -318,7 +318,7 @@ def main():
     parts_near = [p for p in parts if abs(p["c"][0] - cx) - bound_radius(p) < 260]
     for v in views:
         if v == "top":
-            img = render_view(parts_near, lights, None, None, W=600, H=1300, ortho=(cx - 70, cx + 50, -130, 130))
+            img = render_view(parts_near, lights, None, None, W=420, H=1600, ortho=(cx - 75, cx + 55, -240, 240))
         else:
             cam, tgt, fov = cams[v]
             img = render_view(parts_near, lights, np.array(cam, float), np.array(tgt, float), fov)

@@ -1,5 +1,53 @@
 # CHANGELOG
 
+## V28 PROTOTYPE
+
+- **Levels 2x longer:** the walkable road goes from 220 to 440 studs, and traffic runs over
+  570 studs.
+  - District 1 gets 14 extra buildings on the home side and 11 extra on the delivery side.
+  - 8 drop points instead of 6, spread over ±196 (was ±94), so deliveries mean real distance.
+  - 4 extra sidewalk barricades, more mud patches, and more poles, wires and background
+    buildings.
+  - The other districts are extended the same way.
+  - Each player only receives the vehicles within 190 studs (packets stay under the
+    UnreliableRemoteEvent limit), with a cap of 80 vehicles per district.
+- **Every vehicle is modelled and ridden:**
+  - scooter (rusty, or blue with the Blue Smoke skin), tuk-tuk, SUV and Mega 4x4 (bigger
+    wheels, light bar, bull bar, chrome with Royal Chrome)
+  - these reuse the traffic models, welded and scaled under the player; windows are
+    see-through so you can see the driver
+  - glowing hoverboard with thrusters
+  - `VehicleRider.client.lua` (replaces BikeRider) poses the body: pedalling, seated on a
+    scooter, hands on the wheel, or surf stance on the hoverboard
+  - each vehicle has its own jump power; traffic hits account for the vehicle's width
+- **Brown rain:** 1 minute every 15 minutes (first shower 2 min after the server starts).
+  - Brown streaks around the camera, a darker, muddy sky, and a banner showing the time left.
+  - **Slippery ground:** your movement follows your input with a lag (slow starts, drifting
+    turns, you keep sliding when you let go), on foot and on every vehicle.
+  - **Orders placed during the rain pay x3.**
+  - Tuning in `Config.Weather`.
+- **Classic economy:** test mode is off.
+  - Raju pays 100% of the order again (no cut); broken-parcel debt is still there.
+  - Old vehicle prices and rank thresholds.
+- **Horns ÷2:** random interval 7–17 s (was 3.5–8.5), stuck vehicles honk half as often,
+  at least 1.8 s between horns, one horn per accident instead of two.
+- **Music:** ID 106840103375464 removed at your request. It's now a playlist
+  (`Config.Music.SoundIds`) with shuffle and crossfade.
+  - I don't provide any IDs: Roblox is unreachable from my environment, so I can't check
+    any, and I won't invent them.
+  - Fill it from Toolbox > Audio ("sitar", "bollywood", "tabla"…).
+- **Verified offline:**
+  - geometry of all 5 districts (containment, no bypass without crossing, the 8 drops
+    reachable)
+  - 15 min of traffic
+  - integration: every vehicle modelled with its pose, speed and width; rain starts at
+    120 s, x3 order (₹165 vs ₹55), rain stops after 60 s; train; debt; rich customers
+  - test mode (enabled only by the test)
+- **Needs Studio testing:**
+  - the rendering of the ride poses and the scale of the vehicles on real avatars
+  - the feel of the rain slide (it depends on the PlayerModule; tune `Traction`)
+  - performance: district 1 is now ~1,170 parts
+
 ## V27.1 TEST MODE + MUSIC DIAGNOSTICS
 
 - **Test mode** (`Config.TestMode`, on in this build; set `Enabled = false` before publishing):

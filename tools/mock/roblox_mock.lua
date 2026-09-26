@@ -357,6 +357,7 @@ function methods.GetService(_, name)
     return services[name]
 end
 function methods.BindToClose() end
+function methods.BindToRenderStep(_, name, prio, fn) mock.renderSteps = mock.renderSteps or {} mock.renderSteps[name] = fn end
 function methods.HasAppearanceLoaded() return true end
 function methods.Disconnect() end
 workspace.Parent = game

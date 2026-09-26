@@ -86,8 +86,10 @@ function TrafficServer.start(opts)
             for z, list in pairs(byZone) do
                 local sim = sims[z]
                 if sim then
-                    local buf = sim:encode()
-                    for _, plr in ipairs(list.players) do stateRemote:FireClient(plr, buf) end
+                    -- Per player: only the traffic around them (the road is ~570 studs long).
+                    for i, plr in ipairs(list.players) do
+                        stateRemote:FireClient(plr, sim:encode(list.focus[i], T.SnapshotRadius, T.SnapshotMaxVehicles))
+                    end
                 end
             end
         end
@@ -105,7 +107,7 @@ function TrafficServer.start(opts)
             if not train then return end
             local head, tail = TrafficSim.trainSpan(train, workspace:GetServerTimeNow(), W.TrafficHalfLength)
             local pz, px = root.Position.Z, root.Position.X - W.ZoneCenters[z]
-            if pz > math.min(head, tail) - 30 and pz < math.max(head, tail) + 30 and math.abs(px) < TR.HalfWidth + 3 then opts.onHit(plr, "train") end
+            if pz > math.min(head, tail) - 30 and pz < math.max(head, tail) + 30 and math.abs(px) < TR.HalfWidth + 7 then opts.onHit(plr, "train") end
             return
         end
         local v = sim:findVehicle(vehicleId)

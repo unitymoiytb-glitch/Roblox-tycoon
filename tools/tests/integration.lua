@@ -67,7 +67,8 @@ do -- promotion swaps the look back without a respawn, and rebirth puts the rags
 end
 SIT.runClient("Client")
 SIT.runClient("TrafficClient")
-SIT.runClient("BikeRider")
+SIT.runClient("VehicleRider")
+SIT.runClient("Weather")
 runDelayed(2)
 
 local function frames(n, onFrame)
@@ -121,8 +122,8 @@ check(drop.Transparency == 1, "drop pad hidden again; target is now Raju")
 local function goToVendor() root.CFrame = CFrame.new(vendor.Torso.Position + Vector3.new(0, -0.9, 0)) frames(2) end
 goToVendor()
 local done = lastEvent("Mission", "COMPLETE")
-check(done and done[2].Gross >= math.floor(done[2].OrderValue * Config.Delivery.PlayerShare) and done[2].Gross < done[2].OrderValue and done[2].XP == 28,
-    string.format("Raju pays only your cut: ₹%d of a ₹%d order", done and done[2].Reward or -1, done and done[2].OrderValue or -1))
+check(done and done[2].Gross >= math.floor(done[2].OrderValue * Config.Delivery.PlayerShare) and done[2].XP == 28,
+    string.format("Raju pays you back at the stall: ₹%d for a ₹%d order (share %d%%)", done and done[2].Reward or -1, done and done[2].OrderValue or -1, Config.Delivery.PlayerShare * 100))
 
 -- 3) Mechanic unlocks after one delivery.
 local mech = workspace.SIT_World:FindFirstChild("MechanicNPC")
@@ -175,6 +176,37 @@ if bike then for _, d in ipairs(bike:GetDescendants()) do if d:IsA("BasePart") a
 check(bike and bikeParts >= 20, "bicycle is a visible welded model (" .. bikeParts .. " non-colliding parts)")
 check(hum.WalkSpeed == Config.Vehicles.Bicycle.Speed and hum.JumpPower == Config.Vehicles.Bicycle.Jump and hum.WalkSpeed > 16, "bike: speed " .. tostring(hum.WalkSpeed) .. ", jump power " .. tostring(hum.JumpPower))
 frames(5)
+
+-- 5d) Every ride is a real welded model with a riding pose and the right width.
+local expectPose = {Hoverboard = "stand", ["Rusty Scooter"] = "bars", ["Tuk-Tuk"] = "wheel", SUV = "wheel", ["Mega 4x4"] = "wheel", Bicycle = "pedal"}
+for _, name in ipairs({"Hoverboard", "Rusty Scooter", "Tuk-Tuk", "SUV", "Mega 4x4", "Bicycle"}) do
+    local saved = Config.Vehicles[name].Price
+    Config.Vehicles[name].Price = 0
+    simTime += 1
+    remotes.Action.__onFireServer("BUY_VEHICLE", name)
+    Config.Vehicles[name].Price = saved
+    local ride = char:FindFirstChild("Ride_" .. name)
+    local n = 0
+    if ride then for _, d in ipairs(ride:GetDescendants()) do if d:IsA("BasePart") and not d.CanCollide and d.Massless then n += 1 end end end
+    check(ride and n >= 6 and ride:GetAttribute("Pose") == expectPose[name] and hum.WalkSpeed == Config.Vehicles[name].Speed,
+        string.format("%s: %d-part welded model, pose '%s', speed %s, hit half-width %s", name, n, tostring(ride and ride:GetAttribute("Pose")), tostring(hum.WalkSpeed), tostring(char:GetAttribute("RideHalfWidth"))))
+end
+frames(3)
+
+-- 5e) Brown rain: after Config.Weather.FirstDelay the server starts a shower; orders pay x3.
+local normalOrder = lastEvent("Mission", "START")[2].Potential
+simTime = math.max(simTime, Config.Weather.FirstDelay + 5)
+frames(40)
+check(workspace:GetAttribute("SIT_Raining") == true, "brown rain starts after " .. Config.Weather.FirstDelay .. " s")
+check(workspace:FindFirstChild("SIT_Rain") ~= nil and #workspace.SIT_Rain:GetChildren() >= 100, "client renders the brown rain streaks")
+remotes.Action.__onFireServer("START_ITEM_MISSION", "Mystery Bucket")
+local rainOrder = lastEvent("Mission", "START")[2]
+check(rainOrder.Rain == true and rainOrder.Potential == normalOrder * Config.Weather.PriceMultiplier, string.format("order during rain pays x%d (₹%d vs ₹%d)", Config.Weather.PriceMultiplier, rainOrder.Potential, normalOrder))
+root.CFrame = CFrame.new(rainOrder.Drop.Position + Vector3.new(0, 3, 0)) frames(2)
+goToVendor()
+simTime += Config.Weather.Duration + 5
+frames(40)
+check(workspace:GetAttribute("SIT_Raining") == false and workspace:FindFirstChild("SIT_Rain") == nil, "rain stops after " .. Config.Weather.Duration .. " s and the streaks are removed")
 
 -- 6) Wait for a staged accident: wreck rendered at an angle, smoking, solid, hazard lights.
 local sawCrash, sawSmoke, sawSolid, sawAngle = false, false, false, false

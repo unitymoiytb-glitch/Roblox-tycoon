@@ -23,14 +23,14 @@ ZONES = [-400, -200, 0, 200, 400]
 ROAD = 22.0
 SIDE = 28.0
 MEDIAN = 6.0
-PEN = 110.0
+PEN = 220.0
 ALLEY_HALF, ALLEY_BACK = 6.0, -42.0
 HOME_BACK, HOME_HALF = -56.0, 9.0
 SPAWN_BACK, SPAWN_Z = 5.5, -0.8
 LANE_OFFSETS = [-18, -10, 10, 18]
 LANE_WIDTH = 8
-TRAFFIC_HALF = 175
-DROP_Z = [-94, -58, -22, 24, 60, 94]
+TRAFFIC_HALF = 285
+DROP_Z = [-196, -138, -67, -26, 23, 81, 140, 196]
 
 failures = []
 notes = []
@@ -224,7 +224,7 @@ def main(path):
         zb = [p for p in zparts if "/GameplayBounds/" in p["path"]]
         solid = [p for p in zparts if p["collide"] and (lambda lo, hi: lo < 5.5 and hi > 1.6)(*world_extent_y(p))]
         start = (cx + HOME_BACK + SPAWN_BACK, SPAWN_Z)
-        gx0, gx1, gz0, gz1 = cx - 70, cx + 50, -200, 200
+        gx0, gx1, gz0, gz1 = cx - 75, cx + 55, -330, 330
 
         # A: bounds only, lanes open
         g = Grid(gx0, gx1, gz0, gz1)
@@ -354,7 +354,7 @@ def main(path):
                 if not walkable_intended(lx, zz):
                     if abs(zz) > PEN and abs(lx) < ROAD:
                         mouths += 1
-                    elif not (SIDE < lx < SIDE + 4 and -84 < zz < -66):  # enclosed guard nook
+                    elif not (SIDE < lx < SIDE + 4 and -94 < zz < -76):  # enclosed guard nook
                         other += 1
         check(other == 0, f"[D{z}] E: visible geometry alone closes the block except the road-end tunnel mouths "
                           f"({mouths} tunnel cells, {other} other cells; invisible walls seal the mouths)")

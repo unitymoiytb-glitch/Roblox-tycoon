@@ -514,7 +514,7 @@ end
 MissionRE.OnClientEvent:Connect(function(kind,data)
     if kind=="START" then
         missionTitle.Text="DELIVER TO: "..tostring(data.Customer or "customer")
-        missionInfo.Text="Carry the "..data.Item.." across the road. Don't get hit: a broken parcel is paid for by YOU. Order value ₹"..data.Potential.."."
+        missionInfo.Text="Carry the "..data.Item.." across the road. Don't get hit: a broken parcel is paid for by YOU. Order value ₹"..data.Potential..(data.Rain and " (x3 RAIN BONUS!)" or "").."."
         setTarget(data.Drop,Color3.fromRGB(40,240,120),"🔵 CUSTOMER")
     elseif kind=="DELIVERED" then
         showDialog(tostring(data.Customer),"\""..tostring(data.Line).."\"\n\nNo money. Go back to Raju to get your cut (₹"..tostring(data.Expected).." of the ₹"..tostring(data.OrderValue).." order).","...")
@@ -535,31 +535,56 @@ MissionRE.OnClientEvent:Connect(function(kind,data)
     end
 end)
 
--- Background music: try each configured ID, and say clearly why when none can be played.
+-- Background music: a shuffled playlist from Config.Music.SoundIds with a short crossfade.
+-- Tracks Roblox refuses to load are skipped, with the reason printed to Output.
 local ContentProvider=game:GetService("ContentProvider")
-local music=SoundService:FindFirstChild("SIT_IndiaMusic") or Instance.new("Sound")
-music.Name="SIT_IndiaMusic"
-music.Looped=true
-music.Volume=Config.Music.Volume
-music.Parent=SoundService
+local old=SoundService:FindFirstChild("SIT_IndiaMusic") if old then old:Destroy() end
+local musicA=Instance.new("Sound") musicA.Name="SIT_MusicA" musicA.Volume=0 musicA.Parent=SoundService
+local musicB=Instance.new("Sound") musicB.Name="SIT_MusicB" musicB.Volume=0 musicB.Parent=SoundService
 task.spawn(function()
-    local failed={}
-    for _,id in ipairs(Config.Music.SoundIds) do
-        music:Stop()
-        music.SoundId=id
-        local status="?"
-        pcall(function() ContentProvider:PreloadAsync({music},function(_,st) status=tostring(st) end) end)
-        local t0=os.clock()
-        while not music.IsLoaded and os.clock()-t0<8 do task.wait(.25) end
-        if music.IsLoaded and music.TimeLength>0 then
-            music:Play()
-            return
-        end
-        table.insert(failed,id.." ("..status..")")
-        warn("[SIT] Background music "..id.." could not be loaded ("..status.."). Roblox only plays audio that is public, owned by this game's owner, or shared with this experience: Creator Dashboard > Audio > Permissions.")
+    local ids=table.clone(Config.Music.SoundIds or {})
+    if #ids==0 then
+        warn("[SIT] No background music configured. Add Roblox audio IDs to Config.Music.SoundIds (Toolbox > Audio > search 'sitar' / 'bollywood').")
+        return
     end
-    if #failed>0 then
-        showToast("🔇 Music blocked by Roblox: "..table.concat(failed,", ").." • see Output")
+    local blocked={}
+    local current,nextSound=musicA,musicB
+    local order={}
+    local function refill()
+        order=table.clone(ids)
+        if Config.Music.Shuffle then
+            for i=#order,2,-1 do local j=math.random(1,i) order[i],order[j]=order[j],order[i] end
+        end
+    end
+    local function load(sound,id)
+        sound.SoundId=id
+        local status="?"
+        pcall(function() ContentProvider:PreloadAsync({sound},function(_,st) status=tostring(st) end) end)
+        local t0=os.clock()
+        while not sound.IsLoaded and os.clock()-t0<8 do task.wait(.25) end
+        if sound.IsLoaded and sound.TimeLength>0 then return true end
+        blocked[id]=true
+        warn("[SIT] Music "..id.." could not be loaded ("..status.."). It must be public, owned by this game's owner, or shared with this experience.")
+        return false
+    end
+    local played=0
+    while true do
+        if #order==0 then refill() end
+        local id=table.remove(order,1)
+        if not blocked[id] and load(nextSound,id) then
+            played+=1
+            nextSound.Volume=0 nextSound.TimePosition=0 nextSound:Play()
+            TweenService:Create(nextSound,TweenInfo.new(3),{Volume=Config.Music.Volume}):Play()
+            TweenService:Create(current,TweenInfo.new(3),{Volume=0}):Play()
+            current,nextSound=nextSound,current
+            task.wait(math.max(5,current.TimeLength-3))
+        else
+            local usable=0 for _,i in ipairs(ids) do if not blocked[i] then usable+=1 end end
+            if usable==0 then
+                showToast("🔇 Music blocked by Roblox • see Output")
+                return
+            end
+        end
     end
 end)
 

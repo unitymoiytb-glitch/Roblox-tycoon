@@ -9,9 +9,10 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local RS = game:GetService("ReplicatedStorage")
 local Config = require(RS.Shared.Config)
+Config.TestMode.Enabled = true -- shipped off; this test switches it on
 local fails = 0
 local function check(cond, msg) print((cond and "OK   " or "FAIL ") .. msg) if not cond then fails += 1 end end
-check(Config.TestMode.Enabled, "test mode is on in this build")
+check(Config.TestMode.Enabled, "test mode can be switched on")
 local plr = mock.makePlayer("Tester", 9)
 local events = {}
 local remotes = RS.SIT_Remotes

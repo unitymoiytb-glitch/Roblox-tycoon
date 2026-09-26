@@ -313,37 +313,46 @@ end
 -- Snapshot layout (little endian):
 --   header: u8 version, u8 zone, u16 count, f32 simTime
 --   vehicle: u16 id, u8 kind, u8 lane, u8 flags, i16 z*50, u16 speed*50, i8 lateral*20, i8 yawDeg, u8 color
-function TrafficSim:encode()
-    local n = self.count
-    local buf = buffer.create(HEADER_BYTES + VEHICLE_BYTES * n)
-    buffer.writeu8(buf, 0, 1)
-    buffer.writeu8(buf, 1, self.zone)
-    buffer.writef32(buf, 4, self.time)
-    local o, written = HEADER_BYTES, 0
+-- zCenter/radius/maxCount (optional): only vehicles near one player, closest first.
+function TrafficSim:encode(zCenter, radius, maxCount)
+    local picked = {}
     for _, lane in ipairs(self.lanes) do
         for _, v in ipairs(lane.vehicles) do
-            if written < n then
-                local flags = 0
-                if v.crashed then flags += FLAG_CRASHED end
-                if v.blocked then flags += FLAG_BLOCKED end
-                if v.burst then flags += FLAG_BURST end
-                if v.fallen and v.crashed then flags += FLAG_FALLEN end
-                local z = self:laneZ(lane, v.s)
-                buffer.writeu16(buf, o, v.id)
-                buffer.writeu8(buf, o + 2, KIND_IDS[v.kind])
-                buffer.writeu8(buf, o + 3, lane.index)
-                buffer.writeu8(buf, o + 4, flags)
-                buffer.writei16(buf, o + 5, math.clamp(math.floor(z * 50 + 0.5), -32768, 32767))
-                buffer.writeu16(buf, o + 7, math.clamp(math.floor(v.v * 50 + 0.5), 0, 65535))
-                buffer.writei8(buf, o + 9, math.clamp(math.floor(v.off * 20 + 0.5), -127, 127))
-                buffer.writei8(buf, o + 10, math.clamp(math.floor(v.yaw + 0.5), -127, 127))
-                buffer.writeu8(buf, o + 11, v.color)
-                o += VEHICLE_BYTES
-                written += 1
+            local z = self:laneZ(lane, v.s)
+            if not zCenter or math.abs(z - zCenter) <= radius then
+                table.insert(picked, {v = v, lane = lane, z = z})
             end
         end
     end
-    buffer.writeu16(buf, 2, written)
+    if zCenter and maxCount and #picked > maxCount then
+        table.sort(picked, function(a, b) return math.abs(a.z - zCenter) < math.abs(b.z - zCenter) end)
+        for i = #picked, maxCount + 1, -1 do picked[i] = nil end
+    end
+    local n = #picked
+    local buf = buffer.create(HEADER_BYTES + VEHICLE_BYTES * n)
+    buffer.writeu8(buf, 0, 1)
+    buffer.writeu8(buf, 1, self.zone)
+    buffer.writeu16(buf, 2, n)
+    buffer.writef32(buf, 4, self.time)
+    local o = HEADER_BYTES
+    for _, e in ipairs(picked) do
+        local v, lane = e.v, e.lane
+        local flags = 0
+        if v.crashed then flags += FLAG_CRASHED end
+        if v.blocked then flags += FLAG_BLOCKED end
+        if v.burst then flags += FLAG_BURST end
+        if v.fallen and v.crashed then flags += FLAG_FALLEN end
+        buffer.writeu16(buf, o, v.id)
+        buffer.writeu8(buf, o + 2, KIND_IDS[v.kind])
+        buffer.writeu8(buf, o + 3, lane.index)
+        buffer.writeu8(buf, o + 4, flags)
+        buffer.writei16(buf, o + 5, math.clamp(math.floor(e.z * 50 + 0.5), -32768, 32767))
+        buffer.writeu16(buf, o + 7, math.clamp(math.floor(v.v * 50 + 0.5), 0, 65535))
+        buffer.writei8(buf, o + 9, math.clamp(math.floor(v.off * 20 + 0.5), -127, 127))
+        buffer.writei8(buf, o + 10, math.clamp(math.floor(v.yaw + 0.5), -127, 127))
+        buffer.writeu8(buf, o + 11, v.color)
+        o += VEHICLE_BYTES
+    end
     return buf
 end
 
