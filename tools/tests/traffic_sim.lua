@@ -129,4 +129,14 @@ for li = 1, 4 do
 end
 check(gapless == 4, "every lane carries traffic along the entire walkable length (no dead zones)")
 print(string.format("INFO share of time each lane is safe to step into at z=0: %.0f%% %.0f%% %.0f%% %.0f%%", freeAt0[1] / steps * 100, freeAt0[2] / steps * 100, freeAt0[3] / steps * 100, freeAt0[4] / steps * 100))
+-- The median centre must be outside every vehicle's hit reach (vehicle half width + max lateral offset + player radius 0.9).
+local worst = math.huge
+for li, lx in ipairs(W.LaneOffsets) do
+    for kind, spec in pairs(T.Kinds) do
+        local maxOff = math.max(0, W.LaneWidth / 2 - spec.HalfWidth - 0.35)
+        if kind == "car" then maxOff = math.min(maxOff, 0.25) elseif kind == "tuktuk" then maxOff = math.min(maxOff, 0.6) end
+        worst = math.min(worst, math.abs(lx) - maxOff - spec.HalfWidth - 0.9)
+    end
+end
+check(worst > 0.3, string.format("standing on the median centre can never be hit by moving traffic (%.2f studs clearance)", worst))
 print(fails == 0 and "ALL TRAFFIC CHECKS PASSED" or ("TRAFFIC FAILURES: " .. fails))

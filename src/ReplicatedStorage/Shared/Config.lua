@@ -96,20 +96,21 @@ Config.Lootbox = {
 -- =====================================================================
 -- V26 WORLD LAYOUT (shared by server world builder, traffic and client)
 -- Every district uses the same compact, sealed "pen":
---   west: home alley -> sidewalk | 4 lanes | sidewalk -> east: drop houses
+--   west: home alley -> sidewalk | 2 lanes | median | 2 lanes | sidewalk -> east: drop houses
 -- The road runs along Z. Local X is measured from the district centre.
 -- =====================================================================
 Config.World = {
     ZoneCenters = {-400,-200,0,200,400},
     ZoneNames = {"THE SLUMS","OLD MARKET","DELIVERY DISTRICT","BUSINESS CORE","ROYAL HEIGHTS"},
     LaneWidth = 8,
-    LaneOffsets = {-12,-4,4,12},     -- lane centres (local X)
+    MedianHalfWidth = 1.2,           -- raised divider in the middle: the one safe spot mid-crossing
+    LaneOffsets = {-13.2,-5.2,5.2,13.2}, -- lane centres (local X)
     LaneDirections = {-1,-1,1,1},    -- -1 = travels toward -Z, 1 = toward +Z (keep-left traffic)
-    RoadHalfWidth = 16,              -- asphalt from -16 to +16
-    SidewalkOuter = 22,              -- sidewalks from +-16 to +-22
+    RoadHalfWidth = 17.2,            -- asphalt from -17.2 to +17.2 (median in the middle)
+    SidewalkOuter = 23.2,            -- sidewalks from +-17.2 to +-23.2
     PenHalfLength = 110,             -- walkable Z range is -110..110 (sealed ends)
     AlleyHalfWidth = 6,              -- home alley opening in the west row (Z -6..6)
-    AlleyBackX = -37,                -- alley runs from X -22 to -37
+    AlleyBackX = -37,                -- alley runs from X -23.2 to -37
     HomeBackX = -51,                 -- starter room interior X -51..-37, Z -9..9
     HomeHalfWidth = 9,
     HomeSpawnBack = 5.5,             -- spawn this far in front of the room's back wall...
@@ -132,11 +133,13 @@ Config.Traffic = {
     -- Lanes have roles. The two kerb lanes are dense, slow scooter/tuk-tuk streams; the two
     -- inner lanes are sparser fast lanes where cars and motorbikes actually get to speed
     -- (no lane changes, so mixing many scooters into them would pin every car at scooter pace).
-    -- Measured over 15 simulated minutes: ~58% scooters, 14% motorbikes, 6% tuk-tuks, 22% cars.
+    -- Measured (tools/tests): ~61% scooters, 12% motorbikes, 7% tuk-tuks, 20% cars.
     OuterMix = {scooter=0.86, tuktuk=0.10, motorbike=0.04},
     InnerMix = {scooter=0.10, motorbike=0.28, car=0.62},
     -- Extra spacing between spawned vehicles (studs), before the per-kind gap.
-    SpawnSpacing = {Outer={3,16}, Inner={40,95}},
+    -- Tuned with tools/tests/crossing_agent.lua: a patient player crosses kerb->median in ~10 s
+    -- with ~2% hits; rushing the second lane gets you hit ~40% of the time.
+    SpawnSpacing = {Outer={6,20}, Inner={60,130}},
     ZoneSpeedScale = {1.0,1.07,1.14,1.2,1.26},
     ZoneDensityScale = {1.0,0.95,0.9,0.86,0.82},
     Accident = {IntervalMin=25, IntervalMax=50, DurationMin=6, DurationMax=12, FirstDelay=18},

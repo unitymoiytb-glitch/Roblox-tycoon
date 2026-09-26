@@ -376,7 +376,6 @@ local function applyZoneVisibility(rankValue,force)
             owner=owner.Parent
         end
         if zone then setLocalHidden(obj,zone>currentRank) end
-        if obj:IsA("BasePart") and obj:GetAttribute("PromotionGateFor") then obj.LocalTransparencyModifier=1 end
     end
 end
 

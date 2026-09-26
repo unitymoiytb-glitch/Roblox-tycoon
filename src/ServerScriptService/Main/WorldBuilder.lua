@@ -101,7 +101,8 @@ local function surfaceSign(part, text, bg, fg, face, font)
     l.TextColor3 = fg or RGB(30,24,20)
     l.TextScaled = true
     l.TextWrapped = true
-    l.Font = font or Enum.Font.Sarpanch
+    -- Hand-painted look; fall back to a stock font if this one is ever unavailable.
+    if not pcall(function() l.Font = font or Enum.Font.Sarpanch end) then l.Font = Enum.Font.GothamBold end
     l.Text = text
     l.Parent = sg
     return sg
@@ -302,7 +303,7 @@ local function landmark(ctx, w0, w1, opts)
     P(m, "Roof3", V3(D - 3.5, 0.25, Wd - 4.5), at(D / 2 + 2.2, 21.1, wc, 0, 0, -4), C.tin1, M.CorrodedMetal, "query")
     vcyl(m, "Tank", 3.0, 3.4, 0, 0, 0, RGB(30,30,32), M.SmoothPlastic).CFrame = at(2.5, 17.1, w0 + 3) * CFrame.Angles(0, 0, rad(90))
     vcyl(m, "Tank", 3.0, 3.4, 0, 0, 0, RGB(210,190,60), M.SmoothPlastic).CFrame = at(2.5, 17.1, w1 - 3) * CFrame.Angles(0, 0, rad(90))
-    -- Big faded wall advert on the side facing the home alley.
+    -- Big faded wall advert on the south side wall, seen when walking down the far sidewalk.
     local ad = P(m, "WallAd", V3(D - 2, 6, 0.2), at(D / 2, 12.5, w0 - 0.12), RGB(236,226,196), M.SmoothPlastic)
     ad.CFrame = CFrame.lookAt(ad.Position, ad.Position + V3(0, 0, -1))
     surfaceSign(ad, "GOLDEN CUP CHAI\n₹10 ONLY", RGB(236,226,196), RGB(170,40,30), Enum.NormalId.Front)
@@ -355,6 +356,20 @@ local function sidewalkBarricade(ctx, w)
     return m
 end
 
+-- Planter + fence panel closing the median at one point, so the median cannot be used as a
+-- lengthwise walkway past the sidewalk barricades.
+local function medianBlocker(ctx, w)
+    local folder, cx, W, bounds = ctx.folder, ctx.cx, ctx.W, ctx.bounds
+    local m = Instance.new("Model") m.Name = "MedianBlocker" m.Parent = folder
+    local mh = W.MedianHalfWidth
+    P(m, "Planter", V3(mh * 2, 1.4, 3.0), CF(cx, 1.5, w), RGB(150,146,138), M.Concrete, true)
+    ball(P(m, "Shrub", V3(2.6, 2.6, 2.6), CF(cx, 3.0, w), RGB(78,108,56), M.LeafyGrass))
+    P(m, "FencePanel", V3(0.2, 3.4, 5.5), CF(cx, 2.5, w + 2.6), RGB(60,110,90), M.Metal, true)
+    P(m, "FencePanel", V3(0.2, 3.4, 5.5), CF(cx, 2.5, w - 2.6), RGB(60,110,90), M.Metal, true)
+    boundsWall(bounds, "MedianBlocker", cx - mh, cx + mh, w - 5.5, w + 5.5, W.BoundsHeight)
+    return m
+end
+
 -- ------------------------------------------------------------ road + tunnels
 local function buildRoad(folder, cx, W, z, detail)
     local L = W.TrafficHalfLength * 2 + 20
@@ -367,12 +382,16 @@ local function buildRoad(folder, cx, W, z, detail)
         P(folder, "Sidewalk", V3(w, 0.8, walkLen), CFrame.new(cx + side * (W.RoadHalfWidth + w / 2), 0.4, 0), walk, z <= 2 and M.Concrete or M.Pavement, true)
         P(folder, "Kerb", V3(0.5, 0.84, walkLen), CFrame.new(cx + side * (W.RoadHalfWidth + 0.25), 0.42, 0), z <= 2 and RGB(170,150,76) or RGB(210,210,204), M.Concrete)
     end
-    -- Centre double line + dashed lane dividers (only where the player can see them).
-    for _, dx in ipairs({-0.35, 0.35}) do
-        P(folder, "CentreLine", V3(0.22, 0.05, L), CFrame.new(cx + dx, 0.22, 0), RGB(196,164,64), M.SmoothPlastic)
+    -- Raised median: concrete divider with painted kerbs. Vehicles never reach its centre line,
+    -- so it is the one place a player can stop halfway and re-read the traffic.
+    local mh = W.MedianHalfWidth
+    local medLen = W.PenHalfLength * 2 + 60
+    P(folder, "Median", V3(mh * 2, 0.8, medLen), CFrame.new(cx, 0.4, 0), z <= 2 and RGB(138,132,120) or RGB(176,176,170), M.Concrete, true)
+    for _, s in ipairs({-1, 1}) do
+        P(folder, "MedianKerb", V3(0.3, 0.84, medLen), CFrame.new(cx + s * (mh - 0.15), 0.42, 0), z <= 2 and RGB(214,184,60) or RGB(230,230,226), M.Concrete)
     end
     local step = detail and 13 or 26
-    for _, dx in ipairs({-W.LaneWidth, W.LaneWidth}) do
+    for _, dx in ipairs({-(mh + W.LaneWidth), mh + W.LaneWidth}) do
         for zz = -W.PenHalfLength - 30, W.PenHalfLength + 30, step do
             P(folder, "LaneDash", V3(0.35, 0.05, 5), CFrame.new(cx + dx, 0.22, zz), RGB(206,200,184), M.SmoothPlastic)
         end
@@ -727,8 +746,9 @@ function WorldBuilder.build(Config, VehicleFactory)
             info.vendorCF = vendorCF
             buildStreetWires(zoneFolder, cx, W)
             -- WEST ROW (home side)
-            tinShack(westCtx, 6, 20, {name = "NeighbourShack", style = "closed", laundry = true, drum = true})
-            tinShack(westCtx, -20, -6, {name = "TeaStall", style = "counter", sign = "CHAOTIC CHAI", signBg = RGB(196,60,52), signFg = RGB(255,240,200), awning = RGB(196,60,52), goods = RGB(180,140,90)})
+            local flankDepth = -W.AlleyBackX - W.SidewalkOuter
+            tinShack(westCtx, 6, 20, {name = "NeighbourShack", style = "closed", laundry = true, drum = true, depth = flankDepth})
+            tinShack(westCtx, -20, -6, {name = "TeaStall", style = "counter", depth = flankDepth, sign = "CHAOTIC CHAI", signBg = RGB(196,60,52), signFg = RGB(255,240,200), awning = RGB(196,60,52), goods = RGB(180,140,90)})
             garage(westCtx, 20, 38, {sign = "JUGAAD MOTOR WORKS"})
             tinShack(westCtx, -38, -20, {name = "BrokerOffice", style = "counter", sign = "STREET BROKER", signBg = RGB(40,110,70), signFg = RGB(240,240,220), goods = RGB(90,70,50), awning = RGB(62,98,70)})
             tinShack(westCtx, 38, 56, {name = "VegStall", style = "counter", goods = RGB(96,140,60), tank = true})
@@ -756,6 +776,8 @@ function WorldBuilder.build(Config, VehicleFactory)
             sidewalkBarricade(westCtx, -48)
             sidewalkBarricade(eastCtx, -41)
             sidewalkBarricade(eastCtx, 42)
+            medianBlocker(westCtx, 45)
+            medianBlocker(westCtx, -45)
             info.mechanicCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, 29), V3(cx, 0.8, 29))
             info.brokerCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, -29), V3(cx, 0.8, -29))
             -- Slow mud on the sidewalks (only four patches; each is one Touched part).

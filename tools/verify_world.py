@@ -20,13 +20,14 @@ RADIUS = 0.45
 
 # Must match Config.World
 ZONES = [-400, -200, 0, 200, 400]
-ROAD = 16.0
-SIDE = 22.0
+ROAD = 17.2
+SIDE = 23.2
+MEDIAN = 1.2
 PEN = 110.0
 ALLEY_HALF, ALLEY_BACK = 6.0, -37.0
 HOME_BACK, HOME_HALF = -51.0, 9.0
 SPAWN_BACK, SPAWN_Z = 5.5, -0.8
-LANE_OFFSETS = [-12, -4, 4, 12]
+LANE_OFFSETS = [-13.2, -5.2, 5.2, 13.2]
 LANE_WIDTH = 8
 TRAFFIC_HALF = 175
 DROP_Z = [-94, -58, -22, 24, 60, 94]
@@ -338,6 +339,25 @@ def main(path):
                         x, zz = gd.xz(c)
                         best = min(best, math.hypot(x - pos[0], zz - pos[2]))
             check(best < 11, f"[D{z}] D: {name} can be talked to (closest reachable point {best:.1f} studs)")
+
+        # E: visible geometry only (no invisible walls): where would the player get out?
+        ge = Grid(gx0, gx1, gz0, gz1)
+        for p in solid:
+            if "/GameplayBounds/" not in p["path"]:
+                ge.mark_part(p, RADIUS)
+        seene, edge_e = ge.fill(start)
+        mouths = other = 0
+        for c in range(len(seene)):
+            if seene[c]:
+                x, zz = ge.xz(c)
+                lx = x - cx
+                if not walkable_intended(lx, zz):
+                    if abs(zz) > PEN and abs(lx) < ROAD:
+                        mouths += 1
+                    elif not (SIDE < lx < SIDE + 4 and -84 < zz < -66):  # enclosed guard nook
+                        other += 1
+        check(other == 0, f"[D{z}] E: visible geometry alone closes the block except the road-end tunnel mouths "
+                          f"({mouths} tunnel cells, {other} other cells; invisible walls seal the mouths)")
 
         # Traffic covers the whole walkable length (no traffic-free crossing at the ends)
         check(TRAFFIC_HALF > PEN + 12, f"[D{z}] traffic runs z±{TRAFFIC_HALF}, beyond the sealed ends z±{PEN}")

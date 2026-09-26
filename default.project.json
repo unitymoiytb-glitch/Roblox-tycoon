@@ -1,0 +1,14 @@
+{
+  "name": "Survive_India_Tycoon",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/ReplicatedStorage/Shared" }
+    },
+    "ServerScriptService": { "$path": "src/ServerScriptService" },
+    "StarterPlayer": {
+      "StarterPlayerScripts": { "$path": "src/StarterPlayer/StarterPlayerScripts" }
+    },
+    "Lighting": { "$properties": { "Technology": "Future" } }
+  }
+}
