@@ -10,14 +10,13 @@ local Remotes=ReplicatedStorage:WaitForChild("SIT_Remotes")
 local MissionRE=Remotes:WaitForChild("Mission")
 local UIRE=Remotes:WaitForChild("UI")
 local ActionRE=Remotes:WaitForChild("Action")
-local TrafficRE=Remotes:WaitForChild("TrafficHit")
 local Config=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
 local music=SoundService:FindFirstChild("SIT_IndiaMusic") or Instance.new("Sound")
 music.Name="SIT_IndiaMusic"
 music.SoundId="rbxassetid://1844405452"
 music.Looped=true
-music.Volume=.28
+music.Volume=.2 -- leave room for the street horns
 music.Parent=SoundService
 if not music.IsPlaying then pcall(function() music:Play() end) end
 
@@ -55,27 +54,29 @@ local function button(parent,text,pos,size,cb)
     return b
 end
 
+-- V26: slimmer, centred HUD strip (was a full-width 66px bar) so the street stays visible.
 local top=Instance.new("Frame")
-top.Position=UDim2.new(0,0,0,48)
-top.Size=UDim2.new(1,0,0,66)
-top.BackgroundTransparency=.08
+top.Position=UDim2.new(.16,0,0,52)
+top.Size=UDim2.new(.68,0,0,40)
+top.BackgroundTransparency=.35
 top.BackgroundColor3=Color3.fromRGB(8,8,10)
 top.Parent=gui
 local cash=label(top,"₹0",UDim2.new(.015,0,.12,0),UDim2.new(.18,0,.72,0))
 local rank=label(top,"Street Runner",UDim2.new(.20,0,.12,0),UDim2.new(.23,0,.72,0))
 local xp=label(top,"0 XP",UDim2.new(.44,0,.12,0),UDim2.new(.14,0,.72,0))
 local deliveries=label(top,"0 DEL",UDim2.new(.59,0,.12,0),UDim2.new(.12,0,.72,0))
-local master=label(gui,"👑 SERVER MASTER: ...",UDim2.new(.34,0,0,112),UDim2.new(.32,0,0,42))
+local master=label(gui,"👑 SERVER MASTER: ...",UDim2.new(.39,0,0,96),UDim2.new(.22,0,0,24))
+master.BackgroundTransparency=.4
 local shopTopButton=button(top,"SHOP",UDim2.new(.72,0,.12,0),UDim2.new(.12,0,.72,0),nil)
 button(top,"1ST PERSON",UDim2.new(.85,0,.12,0),UDim2.new(.14,0,.72,0),function()
     player.CameraMode=player.CameraMode==Enum.CameraMode.Classic and Enum.CameraMode.LockFirstPerson or Enum.CameraMode.Classic
 end)
 
 local left=Instance.new("Frame")
-left.Position=UDim2.new(.015,0,0,160)
-left.Size=UDim2.new(0,280,0,330)
+left.Position=UDim2.new(.012,0,0,132)
+left.Size=UDim2.new(0,250,0,300)
 left.BackgroundColor3=Color3.fromRGB(10,10,13)
-left.BackgroundTransparency=.12
+left.BackgroundTransparency=.3
 left.Parent=gui
 local missionTitle=label(left,"NO ACTIVE DELIVERY",UDim2.new(.04,0,.03,0),UDim2.new(.92,0,.12,0))
 local missionInfo=label(left,"Explore your block. Interactions appear when you get close.",UDim2.new(.04,0,.17,0),UDim2.new(.92,0,.21,0),false)
@@ -249,26 +250,43 @@ local tutorialArrow=nil
 local currentRank=1
 
 local function orientSpawnTowardExit(char)
-    task.wait(1.0)
-    if currentRank~=1 then return end
-    local root=char and char:FindFirstChild("HumanoidRootPart")
+    -- The server places the character in the home room facing the open front and publishes
+    -- that CFrame as the "HomeSpawn" attribute. Frame a short establishing shot from just
+    -- inside the back wall: room in the foreground, alley + street + traffic beyond.
+    local root=char and char:WaitForChild("HumanoidRootPart",5)
     local hum=char and char:FindFirstChildOfClass("Humanoid")
     local cam=workspace.CurrentCamera
     if not root or not cam then return end
-    -- Starter shack opens toward -Z; always face the street, independent of old map coordinates.
-    local exitLook=Vector3.new(root.Position.X,root.Position.Y,root.Position.Z-30)
-    root.CFrame=CFrame.lookAt(root.Position,exitLook)
-    root.AssemblyLinearVelocity=Vector3.zero
-    if hum then hum.AutoRotate=false end
+    local spawnCF
+    local t0=os.clock()
+    repeat
+        spawnCF=player:GetAttribute("HomeSpawn")
+        if typeof(spawnCF)=="CFrame" and (root.Position-spawnCF.Position).Magnitude<6 then break end
+        task.wait(.1)
+    until os.clock()-t0>3
+    if typeof(spawnCF)~="CFrame" or (root.Position-spawnCF.Position).Magnitude>6 then return end
+    local look,right,up=spawnCF.LookVector,spawnCF.RightVector,Vector3.new(0,1,0)
+    local p=spawnCF.Position
+    -- Shot A: establishing view from the back-right corner (bed, bulb, laundry, exit on the right).
+    local shotA=CFrame.lookAt(p-look*4.7+right*6.3+up*3.6,p+look*18.9-right*12.2-up*0.5)
+    -- Shot B: over the right shoulder, looking straight out of the open front at the street.
+    local shotB=CFrame.lookAt(p-look*4.6+right*2.2+up*3.4,p+look*40+right*0.6+up*0.8)
     cam.CameraType=Enum.CameraType.Scriptable
-    local cameraPos=root.Position + Vector3.new(0,5.5,9.5)
-    cam.CFrame=CFrame.lookAt(cameraPos,Vector3.new(root.Position.X,root.Position.Y+2,root.Position.Z-24))
-    task.wait(1.15)
-    if hum then hum.AutoRotate=true end
-    if cam then
-        cam.CameraType=Enum.CameraType.Custom
-        if hum then cam.CameraSubject=hum end
+    cam.CFrame=shotA
+    if hum then hum.AutoRotate=false end
+    local function playerMoved() return (root.Position-p).Magnitude>3 end
+    local t=os.clock()
+    while os.clock()-t<0.9 and not playerMoved() do task.wait(0.05) end
+    if not playerMoved() then
+        local tween=TweenService:Create(cam,TweenInfo.new(1.6,Enum.EasingStyle.Sine,Enum.EasingDirection.InOut),{CFrame=shotB})
+        tween:Play()
+        t=os.clock()
+        while os.clock()-t<2.0 and not playerMoved() do task.wait(0.05) end
+        tween:Cancel()
     end
+    if hum then hum.AutoRotate=true end
+    cam.CameraType=Enum.CameraType.Custom
+    if hum then cam.CameraSubject=hum end
 end
 
 player.CharacterAdded:Connect(function(char)
@@ -305,7 +323,9 @@ local function setNpcGuide(modelName,text,color)
 end
 
 local function setTarget(part,color)
+    if targetPart and targetPart~=part then targetPart.Transparency=1 end
     targetPart=part
+    part.Transparency=.35 -- local only: the pad glows for this player
     if marker then marker:Destroy() marker=nil end
     if arrow then arrow:Destroy() arrow=nil end
     marker=Instance.new("Highlight")
@@ -317,6 +337,7 @@ local function setTarget(part,color)
     a.Size=UDim2.fromScale(1,1) a.BackgroundTransparency=1 a.Text="▼" a.TextColor3=Color3.fromRGB(60,155,255) a.TextStrokeTransparency=.2 a.TextScaled=true a.Font=Enum.Font.GothamBlack a.Parent=arrow
 end
 local function clearTarget()
+    if targetPart then targetPart.Transparency=1 end
     targetPart=nil
     if marker then marker:Destroy() marker=nil end
     if arrow then arrow:Destroy() arrow=nil end
@@ -340,9 +361,13 @@ local function setLocalHidden(inst,hidden)
     if inst:IsA("BillboardGui") or inst:IsA("SurfaceGui") then inst.Enabled=not hidden end
 end
 
-local function applyZoneVisibility(rankValue)
+local appliedZoneRank=nil
+local function applyZoneVisibility(rankValue,force)
     currentRank=rankValue or 1
+    -- Walking every descendant is expensive; SYNC fires on every cash change, so only redo it on rank changes.
+    if appliedZoneRank==currentRank and not force then return end
     local world=workspace:FindFirstChild("SIT_World") if not world then return end
+    appliedZoneRank=currentRank
     for _,obj in ipairs(world:GetDescendants()) do
         local owner=obj local zone=nil
         while owner and owner~=world do
@@ -403,7 +428,7 @@ UIRE.OnClientEvent:Connect(function(kind,data)
         if (data.Rank or 1)==1 and del==0 and not seenFirstVendor then
             setNpcGuide("VendorNPC_1","⬇ FIRST JOB\nTALK TO RAJU",Color3.fromRGB(80,180,255))
             missionTitle.Text="STEP 1 • GET A JOB"
-            missionInfo.Text="Walk out of your room and talk to Raju. Your first delivery starts there."
+            missionInfo.Text="Walk out of your room and talk to Raju at the end of the alley. Deliveries go ACROSS the road."
             progress.Text="FIRST GOAL • survive 1 delivery"
         elseif (data.Rank or 1)==1 and del>=1 and not ownsBike then
             setNpcGuide("MechanicNPC","⬇ NEW UPGRADE\nBUY A BICYCLE",Color3.fromRGB(90,220,255))
@@ -428,7 +453,7 @@ UIRE.OnClientEvent:Connect(function(kind,data)
             progress.Text="🟡 PROMOTION READY — go see the guard"
             setPromotionGuide(true,data.NextRank.Name)
         else
-            progress.Text="KEEP WORKING"
+            if (data.Rank or 1)~=1 then progress.Text="KEEP WORKING" end
             setPromotionGuide(false)
         end
         if data.Toast then showToast(data.Toast) end
@@ -496,14 +521,8 @@ MissionRE.OnClientEvent:Connect(function(kind,data)
     end
 end)
 
-TrafficRE.OnClientEvent:Connect(function()
-    local cam=workspace.CurrentCamera
-    if not cam then return end
-    local old=cam.FieldOfView cam.FieldOfView=96
-    task.delay(.22,function() if cam then cam.FieldOfView=old end end)
-end)
 
 task.spawn(function()
     local world=workspace:WaitForChild("SIT_World",15)
-    if world then task.wait(.6) applyZoneVisibility(currentRank) end
+    if world then task.wait(.6) applyZoneVisibility(currentRank,true) end
 end)

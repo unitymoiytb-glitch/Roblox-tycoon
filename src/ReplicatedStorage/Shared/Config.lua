@@ -93,4 +93,54 @@ Config.Lootbox = {
     {Weight=2, Kind="Jackpot", Amount=25000}
 }
 
+-- =====================================================================
+-- V26 WORLD LAYOUT (shared by server world builder, traffic and client)
+-- Every district uses the same compact, sealed "pen":
+--   west: home alley -> sidewalk | 4 lanes | sidewalk -> east: drop houses
+-- The road runs along Z. Local X is measured from the district centre.
+-- =====================================================================
+Config.World = {
+    ZoneCenters = {-400,-200,0,200,400},
+    ZoneNames = {"THE SLUMS","OLD MARKET","DELIVERY DISTRICT","BUSINESS CORE","ROYAL HEIGHTS"},
+    LaneWidth = 8,
+    LaneOffsets = {-12,-4,4,12},     -- lane centres (local X)
+    LaneDirections = {-1,-1,1,1},    -- -1 = travels toward -Z, 1 = toward +Z (keep-left traffic)
+    RoadHalfWidth = 16,              -- asphalt from -16 to +16
+    SidewalkOuter = 22,              -- sidewalks from +-16 to +-22
+    PenHalfLength = 110,             -- walkable Z range is -110..110 (sealed ends)
+    AlleyHalfWidth = 6,              -- home alley opening in the west row (Z -6..6)
+    AlleyBackX = -37,                -- alley runs from X -22 to -37
+    HomeBackX = -51,                 -- starter room interior X -51..-37, Z -9..9
+    HomeHalfWidth = 9,
+    HomeSpawnBack = 5.5,             -- spawn this far in front of the room's back wall...
+    HomeSpawnZ = -0.8,               -- ...slightly left of centre, facing the open front (+X)
+    TrafficHalfLength = 175,         -- vehicles live on Z -175..175 (spawn/despawn inside the end tunnels)
+    BoundsHeight = 60,               -- invisible walls are far higher than any jump
+}
+
+Config.Traffic = {
+    SnapshotRate = 0.1,              -- seconds between server snapshots
+    MaxVehiclesPerZone = 48,
+    SpeedRerollMin = 0.8, SpeedRerollMax = 2.5,
+    -- Speed hierarchy (studs/s): tuk-tuk < scooter < motorbike < car. Player walks at 16.
+    Kinds = {
+        tuktuk    = {Speed={15,22}, Accel=9,  HalfWidth=2.7, Length=8.6,  Top=6.4, Gap={10,22}},
+        scooter   = {Speed={23,34}, Accel=16, HalfWidth=1.35,Length=5.6,  Top=5.0, Gap={6,16}},
+        motorbike = {Speed={36,50}, Accel=28, HalfWidth=1.45,Length=6.2,  Top=5.0, Gap={8,20}},
+        car       = {Speed={54,80}, Accel=26, HalfWidth=3.3, Length=12.0, Top=5.4, Gap={14,30}, BurstChance=0.14, BurstSpeed={98,118}},
+    },
+    -- Lanes have roles. The two kerb lanes are dense, slow scooter/tuk-tuk streams; the two
+    -- inner lanes are sparser fast lanes where cars and motorbikes actually get to speed
+    -- (no lane changes, so mixing many scooters into them would pin every car at scooter pace).
+    -- Measured over 15 simulated minutes: ~58% scooters, 14% motorbikes, 6% tuk-tuks, 22% cars.
+    OuterMix = {scooter=0.86, tuktuk=0.10, motorbike=0.04},
+    InnerMix = {scooter=0.10, motorbike=0.28, car=0.62},
+    -- Extra spacing between spawned vehicles (studs), before the per-kind gap.
+    SpawnSpacing = {Outer={3,16}, Inner={40,95}},
+    ZoneSpeedScale = {1.0,1.07,1.14,1.2,1.26},
+    ZoneDensityScale = {1.0,0.95,0.9,0.86,0.82},
+    Accident = {IntervalMin=25, IntervalMax=50, DurationMin=6, DurationMax=12, FirstDelay=18},
+    HornSoundId = "rbxassetid://17737027571", -- the horn used by earlier builds
+}
+
 return Config
