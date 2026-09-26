@@ -274,3 +274,182 @@ RunService.RenderStepped:Connect(function(dt)
         if e and math.random() < 0.3 then honk(e) nextBlockedHonk = now + 1.8 + math.random() * 2 end
     end
 end)
+
+-- ---------------------------------------------------------------- commuter train
+-- The server only sends a timetable {zone, start (server time), dir, speed, length}.
+-- Every client computes the same position from workspace:GetServerTimeNow(), so the train
+-- is smooth, costs no replication, and hits are checked against what the player sees.
+local TR = Config.Train
+local TrainRE = Remotes:WaitForChild("TrainState")
+local trainState, trainRig = nil, nil
+local lampCache = {}
+local warnHorn = Instance.new("Sound")
+warnHorn.Name = "TrainWarning"
+warnHorn.SoundId = T.HornSoundId
+warnHorn.RollOffMode = Enum.RollOffMode.InverseTapered
+warnHorn.RollOffMinDistance = 20
+warnHorn.RollOffMaxDistance = 260
+warnHorn.Volume = 0.5
+warnHorn.PlaybackSpeed = 0.62
+
+local RIDER_SHIRTS = {Color3.fromRGB(226,220,206), Color3.fromRGB(196,72,58), Color3.fromRGB(58,98,160), Color3.fromRGB(214,160,52), Color3.fromRGB(70,128,92), Color3.fromRGB(120,72,140)}
+local RIDER_SKIN = {Color3.fromRGB(141,98,70), Color3.fromRGB(118,80,56), Color3.fromRGB(168,120,86)}
+
+local function buildTrain()
+    local model = Instance.new("Model")
+    model.Name = "CommuterTrain"
+    local parts, offsets = {}, {}
+    local function add(name, size, pos, color, material, shape)
+        local p = Instance.new("Part")
+        p.Name = name
+        p.Anchored = true
+        p.CanCollide = false
+        p.CanTouch = false
+        p.CanQuery = false
+        p.CastShadow = size.X * size.Y * size.Z > 20
+        p.Size = size
+        p.Color = color
+        p.Material = material or Enum.Material.Metal
+        if shape then p.Shape = shape end
+        p.CFrame = CFrame.new(pos)
+        p.Parent = model
+        table.insert(parts, p)
+        table.insert(offsets, p.CFrame)
+        return p
+    end
+    local V = Vector3.new
+    local hw, bottom = TR.HalfWidth, 1.3
+    local h = TR.Height - bottom
+    local el, cl = TR.EngineLength, TR.CoachLength
+    -- Locomotive (front at z = 0, train extends toward +Z, faces -Z).
+    local engine = add("EngineBody", V(hw * 2, h, el - 1), V(0, bottom + h / 2, el / 2 + 0.5), Color3.fromRGB(44,70,140))
+    add("EngineStripe", V(hw * 2 + 0.06, 0.9, el - 1), V(0, bottom + h * 0.45, el / 2 + 0.5), Color3.fromRGB(236,226,196))
+    add("Windscreen", V(hw * 2 - 1.2, 1.6, 0.2), V(0, bottom + h * 0.8, 0.42), Color3.fromRGB(30,40,50), Enum.Material.Glass)
+    add("HeadLight", V(1.0, 0.8, 0.2), V(0, bottom + h * 0.35, 0.4), Color3.fromRGB(255,240,200), Enum.Material.Neon)
+    add("EngineRoof", V(hw * 2 - 0.6, 0.5, el - 2), V(0, bottom + h + 0.25, el / 2 + 0.5), Color3.fromRGB(120,122,126))
+    add("EngineUnder", V(hw * 2 - 1, 1.2, el - 2), V(0, 0.8, el / 2 + 0.5), Color3.fromRGB(24,24,24))
+    for i = 1, TR.Coaches do
+        local z0 = el + (i - 1) * cl
+        local zc = z0 + cl / 2
+        local body = (i % 2 == 0) and Color3.fromRGB(122,40,36) or Color3.fromRGB(52,84,132)
+        add("Coach", V(hw * 2, h, cl - 0.8), V(0, bottom + h / 2, zc), body)
+        add("Windows", V(hw * 2 + 0.06, 1.3, cl - 4), V(0, bottom + h * 0.62, zc), Color3.fromRGB(26,28,30), Enum.Material.SmoothPlastic)
+        add("Door", V(hw * 2 + 0.08, h * 0.8, 1.3), V(0, bottom + h * 0.42, z0 + 1.4), Color3.fromRGB(30,30,32), Enum.Material.SmoothPlastic)
+        add("CoachRoof", V(hw * 2 - 0.4, 0.45, cl - 1.2), V(0, bottom + h + 0.22, zc), Color3.fromRGB(128,128,130))
+        add("CoachUnder", V(hw * 2 - 1, 1.2, cl - 2), V(0, 0.8, zc), Color3.fromRGB(24,24,24))
+        -- People riding on the roof...
+        for k = 1, 3 do
+            local seed = i * 7 + k
+            local x = (k - 2) * 1.9 + ((seed % 3) - 1) * 0.3
+            local z = z0 + 2.5 + k * 3.6
+            add("RoofRider", V(1.3, 1.5, 0.8), V(x, bottom + h + 1.2, z), RIDER_SHIRTS[seed % #RIDER_SHIRTS + 1], Enum.Material.Fabric)
+            add("RoofRiderHead", V(0.95, 0.95, 0.95), V(x, bottom + h + 2.4, z), RIDER_SKIN[seed % #RIDER_SKIN + 1], Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+        end
+        -- ...and one hanging out of the open door.
+        local side = (i % 2 == 0) and 1 or -1
+        add("DoorHanger", V(0.8, 1.6, 1.0), V(side * (hw + 0.45), bottom + h * 0.55, z0 + 1.4), RIDER_SHIRTS[(i * 3) % #RIDER_SHIRTS + 1], Enum.Material.Fabric)
+        add("DoorHangerHead", V(0.9, 0.9, 0.9), V(side * (hw + 0.55), bottom + h * 0.55 + 1.2, z0 + 1.4), RIDER_SKIN[i % #RIDER_SKIN + 1], Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+    end
+    local horn = Instance.new("Sound")
+    horn.Name = "TrainHorn"
+    horn.SoundId = T.HornSoundId
+    horn.PlaybackSpeed = 0.5
+    horn.Volume = 0.9
+    horn.RollOffMode = Enum.RollOffMode.InverseTapered
+    horn.RollOffMinDistance = 30
+    horn.RollOffMaxDistance = 420
+    horn.Parent = engine
+    return {model = model, parts = parts, offsets = offsets, horn = horn}
+end
+
+local function signalLamps(zone)
+    if lampCache[zone] then return lampCache[zone] end
+    local world = workspace:FindFirstChild("SIT_World")
+    local zf = world and world:FindFirstChild("Zone_" .. zone)
+    if not zf then return {} end
+    local lamps = {}
+    for _, d in ipairs(zf:GetChildren()) do
+        if d.Name == "RailSignalLamp" then table.insert(lamps, d) end
+    end
+    lampCache[zone] = lamps
+    return lamps
+end
+
+local function setLamps(zone, on)
+    for _, lamp in ipairs(signalLamps(zone)) do
+        if lamp:GetAttribute("On") ~= on then
+            lamp:SetAttribute("On", on)
+            lamp.Material = on and Enum.Material.Neon or Enum.Material.SmoothPlastic
+            lamp.Color = on and Color3.fromRGB(255, 40, 30) or Color3.fromRGB(90, 20, 18)
+        end
+    end
+end
+
+TrainRE.OnClientEvent:Connect(function(train)
+    if type(train) == "table" and type(train.start) == "number" then
+        if not trainState or trainState.id ~= train.id then train.honked = {} trainState = train end
+    end
+end)
+
+local lampZone, prevHead = nil, nil
+local function parkTrain()
+    if trainRig and trainRig.model.Parent then trainRig.model.Parent = nil end
+    prevHead = nil
+end
+
+RunService.RenderStepped:Connect(function()
+    local tr = trainState
+    local now = workspace:GetServerTimeNow()
+    if not tr or tr.zone ~= currentZone or TrafficSim.trainDone(tr, now, W.TrafficHalfLength) then
+        if lampZone then setLamps(lampZone, false) lampZone = nil end
+        parkTrain()
+        return
+    end
+    local t = now - tr.start
+    lampZone = tr.zone
+    setLamps(tr.zone, t > -tr.warn and (now * 3) % 2 < 1)
+    local root, hum = characterRoot()
+    -- Warning horns from the signal nearest the player, then the engine horn as it enters.
+    local function honkOnce(key, sound, parent)
+        if tr.honked[key] then return end
+        tr.honked[key] = true
+        if parent then sound.Parent = parent end
+        sound.TimePosition = 0
+        sound:Play()
+    end
+    if t > -tr.warn and root then
+        local best, bestD = nil, math.huge
+        for _, lamp in ipairs(signalLamps(tr.zone)) do
+            local d = math.abs(lamp.Position.Z - root.Position.Z)
+            if d < bestD then best, bestD = lamp, d end
+        end
+        if best then
+            honkOnce("warn1", warnHorn, best)
+            if t > -1.6 then honkOnce("warn2", warnHorn, best) end
+        end
+    end
+    if t < -0.2 then parkTrain() return end
+    if not trainRig then trainRig = buildTrain() end
+    if not trainRig.model.Parent then trainRig.model.Parent = folder end
+    honkOnce("engine", trainRig.horn)
+    local cx = W.ZoneCenters[tr.zone]
+    local head, tail = TrafficSim.trainSpan(tr, now, W.TrafficHalfLength)
+    local cf = CFrame.new(cx, 0.5, head)
+    if tr.dir > 0 then cf = cf * FLIP end
+    local cfs = table.create(#trainRig.parts)
+    for i, off in ipairs(trainRig.offsets) do cfs[i] = cf * off end
+    workspace:BulkMoveTo(trainRig.parts, cfs, Enum.BulkMoveMode.FireCFrameChanged)
+    -- Hit check (swept over this frame so the 175 stud/s train cannot skip past the player).
+    if root and hum and hum.Health > 0 and os.clock() > hitLock then
+        local pos = root.Position
+        local feet = pos.Y - (hum.HipHeight + root.Size.Y / 2)
+        local zMin = math.min(head, tail, prevHead or head) - 0.8
+        local zMax = math.max(head, tail, prevHead or head) + 0.8
+        if math.abs(pos.X - cx) < TR.HalfWidth + 0.9 and feet < TR.Height + 1 and pos.Z > zMin and pos.Z < zMax then
+            hitLock = os.clock() + 2.5
+            HitRE:FireServer(-1)
+            kickCamera()
+        end
+    end
+    prevHead = head
+end)

@@ -1,6 +1,7 @@
 -- Server Main + Client + TrafficClient running together against the mock, with a simulated clock.
 local simTime = 0
 SIT.clock = function() return simTime end
+SIT.mock.serverTimeFn = function() return simTime end
 SIT.mount()
 SIT.runServer()
 local mock = SIT.mock
@@ -65,6 +66,7 @@ do -- promotion swaps the look back without a respawn, and rebirth puts the rags
 end
 SIT.runClient("Client")
 SIT.runClient("TrafficClient")
+SIT.runClient("BikeRider")
 runDelayed(2)
 
 local function frames(n, onFrame)
@@ -85,6 +87,7 @@ check((mock.bulkMoves or 0) >= 100, "vehicles are moved with one BulkMoveTo per 
 -- Rendered vehicles stay exactly in their lanes (x = lane centre + fixed lateral offset).
 local worstLane = 0
 for _, m in ipairs(folder:GetChildren()) do
+    if not m.PrimaryPart then continue end
     local x = m.PrimaryPart.Position.X - W.ZoneCenters[1]
     local best = math.huge
     for _, lo in ipairs(W.LaneOffsets) do best = math.min(best, math.abs(x - lo)) end
@@ -99,18 +102,26 @@ prompt.Triggered:Fire(plr)
 local menu = lastEvent("UI", "VENDOR_MENU")
 check(menu and #menu[2].Items >= 1 and menu[2].Items[1].Name == "Mystery Bucket", "Raju opens the delivery menu")
 
--- 2) Accept a delivery, walk (teleport) onto the drop pad on the far sidewalk.
+-- 2) Accept a delivery, walk (teleport) onto the drop pad on the far sidewalk: the rich customer
+--    takes it without paying, then Raju pays only part of the order value.
 remotes.Action.__onFireServer("START_ITEM_MISSION", "Mystery Bucket")
 local start = lastEvent("Mission", "START")
-check(start and start[2].Drop, "mission starts with a drop point")
+check(start and start[2].Drop and start[2].Customer, "mission starts with a drop point and a customer (" .. tostring(start and start[2].Customer) .. ")")
+check(workspace.SIT_World:FindFirstChild("Customer") ~= nil, "the customer waits at their door")
 local drop = start[2].Drop
 check(drop.Position.X > W.ZoneCenters[1] + W.RoadHalfWidth, "drop point is across the road")
 check(drop.Transparency < 1, "drop pad glows locally while it is the target")
 root.CFrame = CFrame.new(drop.Position + Vector3.new(0, 3, 0))
 frames(2)
+local delivered = lastEvent("Mission", "DELIVERED")
+check(delivered and type(delivered[2].Line) == "string" and delivered[2].Vendor ~= nil, "customer sneers, refuses to pay, sends you back: \"" .. tostring(delivered and delivered[2].Line) .. "\"")
+check(lastEvent("Mission", "COMPLETE") == nil, "no money at the customer's door")
+check(drop.Transparency == 1, "drop pad hidden again; target is now Raju")
+local function goToVendor() root.CFrame = CFrame.new(vendor.Torso.Position + Vector3.new(0, -0.9, 0)) frames(2) end
+goToVendor()
 local done = lastEvent("Mission", "COMPLETE")
-check(done and done[2].Reward >= 55 and done[2].XP == 28, "delivery completes and pays (₹" .. (done and done[2].Reward or 0) .. ", " .. (done and done[2].XP or 0) .. " XP)")
-check(drop.Transparency == 1, "drop pad hidden again after completion")
+check(done and done[2].Gross >= math.floor(done[2].OrderValue * Config.Delivery.PlayerShare) and done[2].Gross < done[2].OrderValue and done[2].XP == 28,
+    string.format("Raju pays only your cut: ₹%d of a ₹%d order", done and done[2].Reward or -1, done and done[2].OrderValue or -1))
 
 -- 3) Mechanic unlocks after one delivery.
 local mech = workspace.SIT_World:FindFirstChild("MechanicNPC")
@@ -125,21 +136,50 @@ local guard = workspace.SIT_World:FindFirstChild("GuardNPC_1")
 guard.Torso:FindFirstChildOfClass("ProximityPrompt").Triggered:Fire(plr)
 check(lastEvent("UI", "GUARD_BLOCK") ~= nil, "promotion guard blocks an unqualified player")
 
--- 5) Stand in the fast lane: get hit, lose the delivery, respawn at home.
+-- 5) Stand in the fast lane with a parcel: get hit, parcel broken -> debt to Raju, back to the room.
 simTime += 1
 remotes.Action.__onFireServer("START_ITEM_MISSION", "Mystery Bucket")
 check(lastEvent("Mission", "START") ~= start, "second mission started")
 local laneX = W.ZoneCenters[1] + W.LaneOffsets[2]
 root.CFrame = CFrame.new(laneX, 3.2, 0)
-local hitFrame = frames(60 * 20, function() return lastEvent("Mission", "FAILED") ~= nil end)
-check(lastEvent("Mission", "FAILED") ~= nil, string.format("standing in lane 2 gets you hit within %.1f s", hitFrame / 60))
+local hitFrame = frames(60 * 20, function() return lastEvent("Mission", "BROKEN") ~= nil end)
+local broken = lastEvent("Mission", "BROKEN")
+check(broken ~= nil, string.format("standing in lane 2 gets you hit within %.1f s", hitFrame / 60))
+check(broken and broken[2].Debt > 0 and broken[2].TotalDebt == broken[2].Debt, "broken parcel: you owe Raju ₹" .. tostring(broken and broken[2].Debt))
+check(lastEvent("UI", "SYNC")[2].Debt == (broken and broken[2].TotalDebt), "debt shows in the HUD sync")
 runDelayed(1)
 check((root.Position - home.Position).Magnitude < 0.01, "after the hit the player is sent back into the starter room")
+
+-- 5b) Next payout repays the debt first.
+remotes.Action.__onFireServer("START_ITEM_MISSION", "Mystery Bucket")
+root.CFrame = CFrame.new(lastEvent("Mission", "START")[2].Drop.Position + Vector3.new(0, 3, 0)) frames(2)
+goToVendor()
+local repaid = lastEvent("Mission", "COMPLETE")
+check(repaid and repaid[2].DebtPaid == broken[2].Debt and repaid[2].Debt == 0 and repaid[2].Reward == repaid[2].Gross - repaid[2].DebtPaid,
+    string.format("Raju keeps ₹%d of the next payout to clear the debt", repaid and repaid[2].DebtPaid or -1))
+
+-- 5c) Deliver until the bicycle is affordable, buy it: visible bike, faster, jumps higher.
+for _ = 1, 20 do
+    if lastEvent("UI", "SYNC")[2].Cash >= Config.Vehicles.Bicycle.Price then break end
+    simTime += 1
+    remotes.Action.__onFireServer("START_ITEM_MISSION", "Mystery Bucket")
+    root.CFrame = CFrame.new(lastEvent("Mission", "START")[2].Drop.Position + Vector3.new(0, 3, 0)) frames(2)
+    goToVendor()
+end
+simTime += 1
+remotes.Action.__onFireServer("BUY_VEHICLE", "Bicycle")
+local bike = char:FindFirstChild("Ride_Bicycle")
+local bikeParts = 0
+if bike then for _, d in ipairs(bike:GetDescendants()) do if d:IsA("BasePart") and d.Transparency < 1 and not d.CanCollide then bikeParts += 1 end end end
+check(bike and bikeParts >= 20, "bicycle is a visible welded model (" .. bikeParts .. " non-colliding parts)")
+check(hum.WalkSpeed == Config.Vehicles.Bicycle.Speed and hum.JumpPower == Config.Vehicles.Bicycle.Jump and hum.WalkSpeed > 16, "bike: speed " .. tostring(hum.WalkSpeed) .. ", jump power " .. tostring(hum.JumpPower))
+frames(5)
 
 -- 6) Wait for a staged accident: wreck rendered at an angle, smoking, solid, hazard lights.
 local sawCrash, sawSmoke, sawSolid, sawAngle = false, false, false, false
 frames(60 * 70, function()
     for _, m in ipairs(folder:GetChildren()) do
+        if not m.PrimaryPart then continue end
         local hb = m:FindFirstChild("Hitbox")
         if hb and hb.CanCollide then sawSolid = true end
         if m.PrimaryPart:FindFirstChildOfClass("Smoke") then sawSmoke = true end
@@ -151,7 +191,37 @@ end)
 check(sawCrash and sawAngle, "a staged accident appears (vehicle turned across its lane)")
 check(sawSolid, "stopped wrecks/queues become solid obstacles on the client")
 check(sawSmoke, "wreck smokes")
+-- 7) The train: signals + timetable, then it blasts through; standing on the rails is fatal.
+root.CFrame = CFrame.new(W.ZoneCenters[1] - 30, 3.8, 0)
+local trainEvt = nil
+frames(60 * 90, function() trainEvt = lastEvent("TrainState") return trainEvt ~= nil and trainEvt[1].start > simTime end)
+check(trainEvt and trainEvt[1].speed > 150 and trainEvt[1].length > 100, "a commuter train is scheduled (" .. tostring(trainEvt and math.floor(trainEvt[1].speed)) .. " studs/s)")
+root.CFrame = CFrame.new(W.ZoneCenters[1] + 0.5, 3.8, 0) -- stand between the rails
+local brokenBefore = #clientEvents
+local sawTrain, sawLamp = false, false
+local trainHit = false
+local riders = 0
+local hitRemote = remotes.TrafficHit
+local oldFire = hitRemote.__onFireServer
+hitRemote.__onFireServer = function(id, ...) if id == -1 then trainHit = true end return oldFire(id, ...) end
+frames(60 * 12, function()
+    local tm = folder:FindFirstChild("CommuterTrain")
+    if tm then
+        sawTrain = true
+        local n = 0 for _, d in ipairs(tm:GetChildren()) do if d.Name == "RoofRider" then n += 1 end end
+        riders = math.max(riders, n)
+    end
+    for _, d in ipairs(workspace.SIT_World.Zone_1:GetChildren()) do if d.Name == "RailSignalLamp" and d.Material.Name == "Neon" then sawLamp = true end end
+    return trainHit
+end)
+check(sawLamp, "rail signals flash before the train")
+check(sawTrain, "the train (with riders on the roof) is rendered")
+check(trainHit, "standing on the rails gets you hit by the train")
+runDelayed(1)
+check((root.Position - home.Position).Magnitude < 0.01, "train hit sends you back to the starter room")
+check(riders >= 12, riders .. " passengers ride on the train roof")
+
 local horns = 0
 for _, inst in ipairs(mock.allInstances) do if inst.ClassName == "Sound" and inst.Name == "Horn" then horns += 1 end end
-check(horns <= 4, "at most 4 horn Sound objects exist (" .. horns .. ")")
+check(horns <= 4, "at most 4 traffic horn Sound objects exist (" .. horns .. ")")
 print(fails == 0 and "ALL INTEGRATION CHECKS PASSED" or ("INTEGRATION FAILURES: " .. fails))

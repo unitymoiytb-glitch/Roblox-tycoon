@@ -307,7 +307,9 @@ def main():
         # Default follow camera once control returns (pulled in by the back wall).
         "doorway": (hp - look * 5.0 + np.array([0, 2.4, 0]), hp + look * 30 + np.array([0, 0.5, 0]), 70),
         # Standing at the alley mouth next to Raju, looking across the road.
-        "alley": (np.array([cx - 27, 6.0, -1.0]), np.array([cx + 25, 4.0, 6.0]), 70),
+        "alley": (np.array([cx - 32, 6.0, -1.0]), np.array([cx + 25, 4.0, 6.0]), 70),
+        # Standing on the west sidewalk looking down the road with the railway in the middle.
+        "rail": (np.array([cx - 24, 6.5, 40]), np.array([cx + 2, 3.0, -40]), 70),
         # Mid-crossing view down the road.
         "street": (np.array([cx - 10, 5.5, 12]), np.array([cx + 2, 3.5, -60]), 70),
         # Elevated establishing shot of the block.

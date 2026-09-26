@@ -1,5 +1,61 @@
 # CHANGELOG
 
+## V27 TRAIN + BIKE + DEBT
+
+**Not done, deliberately:** the customers are *not* a "higher caste". Using caste (a real,
+living system of discrimination) as a game mechanic is excluded by the project's own rules.
+Customers are **rich, snobbish people** who look down on you because you're poor, and the
+gameplay (humiliation, no payment) is otherwise identical.
+
+- **Train:** a railway replaces the median between the two carriageways (a 12-stud-wide
+  corridor with ballast, sleepers, rails and yellow kerbs).
+  - About every 35–70 s a commuter train (locomotive + 6 coaches, ~120 studs, 155–200
+    studs/s) crosses the whole block in ~2 s. There are people riding on the roof (18) and
+    hanging out of the doors.
+  - 4 s before it arrives, 4 red signals flash and a deep horn sounds from the signal nearest
+    to you, then the locomotive horn.
+  - The train kills anyone between its rails, jumping included. The corridor is otherwise
+    safe from cars.
+  - Rendering: the server sends only a timetable; every client computes the position from
+    server time (smooth, zero replication), with swept hit detection that the server
+    re-checks.
+- **Delivery flow:**
+  - You carry the parcel to a **rich customer** who appears at their door (6 profiles: Rich
+    Customer, Snobby Landlord, Spoiled Rich Kid, Posh Aunty, Gold-Chain Uncle, Impatient
+    Boss; sunglasses, gold chain, watch).
+  - They take the parcel, **insult you** (10 lines about your poverty and your dirt) and
+    **don't pay**.
+  - You have to go back to Raju: he pays **70% of the order value** (`Config.Delivery.PlayerShare`).
+- **Broken parcel = debt:** hit by a vehicle or the train *while carrying the parcel* →
+  "YOU BROKE THE …" dialog → a debt of 40% of the order value to Raju → back to your room.
+  - The debt shows in red in the HUD and is deducted from the next payouts.
+  - A hit *on the way back* costs nothing: Raju still owes you the payment.
+  - Rebirth wipes the debt.
+- **Bicycle:**
+  - A real welded Indian delivery bike, visible to everyone: wheels, rusted frame,
+    handlebar, saddle, pedals, rear rack with a parcel, basket and a light.
+  - **Speed 26** (was 18; walking is 16) and a **jump of 60** (bunny hop).
+  - `BikeRider.client.lua` stops the walk animation and poses the R15 body: seated,
+    pedalling in rhythm with speed (legs still in the air), hands on the handlebar.
+  - The other vehicles' speeds were shifted to keep the progression (Hoverboard 28,
+    Scooter 31…).
+- **Music:** `rbxassetid://106840103375464` (already in place since V26.1). The YouTube link
+  can't be used directly in Roblox; the audio has to be uploaded to Roblox.
+- "SHARMA KIRANA STORE" renamed to "LUCKY KIRANA STORE" (Sharma is a caste-marked surname).
+- **Verified offline (mock integration):**
+  - customer at the door, insult with no payment, return to Raju, partial payment
+    (₹38 on a ₹55 order)
+  - hit while carrying → ₹22 debt → next payout deducted
+  - bike bought, 22 visible parts, speed and jump applied
+  - a train scheduled at 197 studs/s: signals flash, it is rendered with 18 roof riders,
+    and a player on the rails gets hit and sent home
+  - geometry of all 5 districts OK with the new road
+- **Needs Studio testing:**
+  - the visual quality of the bike pedalling (Motor6D.Transform override; R15 only, R6 players
+    get the bike without the pose)
+  - the feel of the train's speed
+  - the economy (70% share + debt slows the first rank; tune `Config.Delivery`)
+
 ## V26.1 RAGS + MUSIC
 
 - **Background music** is now `rbxassetid://106840103375464`, in `Client.client.lua` at volume 0.2.

@@ -64,10 +64,10 @@ Config.DeliveryItems = {
 
 Config.Vehicles = {
     Feet={Speed=16, Price=0, UnlockNPC="Mechanic"},
-    Bicycle={Speed=18, Price=350, UnlockNPC="Mechanic"},
-    Hoverboard={Speed=22, Price=900, UnlockNPC="Mechanic"},
-    ["Rusty Scooter"]={Speed=27, Price=6500, UnlockNPC="Mechanic"},
-    ["Tuk-Tuk"]={Speed=32, Price=28000, UnlockNPC="Mechanic"},
+    Bicycle={Speed=26, Jump=60, Price=350, UnlockNPC="Mechanic"},
+    Hoverboard={Speed=28, Price=900, UnlockNPC="Mechanic"},
+    ["Rusty Scooter"]={Speed=31, Price=6500, UnlockNPC="Mechanic"},
+    ["Tuk-Tuk"]={Speed=34, Price=28000, UnlockNPC="Mechanic"},
     SUV={Speed=38, Price=240000, UnlockNPC="Mechanic"},
     ["Mega 4x4"]={Speed=45, Price=1500000, UnlockNPC="Mechanic"}
 }
@@ -96,22 +96,22 @@ Config.Lootbox = {
 -- =====================================================================
 -- V26 WORLD LAYOUT (shared by server world builder, traffic and client)
 -- Every district uses the same compact, sealed "pen":
---   west: home alley -> sidewalk | 2 lanes | median | 2 lanes | sidewalk -> east: drop houses
+--   west: home alley -> sidewalk | 2 lanes | RAILWAY | 2 lanes | sidewalk -> east: drop houses
 -- The road runs along Z. Local X is measured from the district centre.
 -- =====================================================================
 Config.World = {
     ZoneCenters = {-400,-200,0,200,400},
     ZoneNames = {"THE SLUMS","OLD MARKET","DELIVERY DISTRICT","BUSINESS CORE","ROYAL HEIGHTS"},
     LaneWidth = 8,
-    MedianHalfWidth = 1.2,           -- raised divider in the middle: the one safe spot mid-crossing
-    LaneOffsets = {-13.2,-5.2,5.2,13.2}, -- lane centres (local X)
+    MedianHalfWidth = 6,             -- railway corridor between the two carriageways (safe from cars, not from trains)
+    LaneOffsets = {-18,-10,10,18},   -- lane centres (local X)
     LaneDirections = {-1,-1,1,1},    -- -1 = travels toward -Z, 1 = toward +Z (keep-left traffic)
-    RoadHalfWidth = 17.2,            -- asphalt from -17.2 to +17.2 (median in the middle)
-    SidewalkOuter = 23.2,            -- sidewalks from +-17.2 to +-23.2
+    RoadHalfWidth = 22,              -- asphalt from -22 to +22 (rail corridor -6..6 in the middle)
+    SidewalkOuter = 28,              -- sidewalks from +-22 to +-28
     PenHalfLength = 110,             -- walkable Z range is -110..110 (sealed ends)
     AlleyHalfWidth = 6,              -- home alley opening in the west row (Z -6..6)
-    AlleyBackX = -37,                -- alley runs from X -23.2 to -37
-    HomeBackX = -51,                 -- starter room interior X -51..-37, Z -9..9
+    AlleyBackX = -42,                -- alley runs from X -28 to -42
+    HomeBackX = -56,                 -- starter room interior X -56..-42, Z -9..9
     HomeHalfWidth = 9,
     HomeSpawnBack = 5.5,             -- spawn this far in front of the room's back wall...
     HomeSpawnZ = -0.8,               -- ...slightly left of centre, facing the open front (+X)
@@ -144,6 +144,24 @@ Config.Traffic = {
     ZoneDensityScale = {1.0,0.95,0.9,0.86,0.82},
     Accident = {IntervalMin=25, IntervalMax=50, DurationMin=6, DurationMax=12, FirstDelay=18},
     HornSoundId = "rbxassetid://17737027571", -- the horn used by earlier builds
+}
+
+-- Commuter train on the railway between the two carriageways. Clients render it from the
+-- server's schedule (server time), so it is perfectly smooth and needs no replication.
+Config.Train = {
+    IntervalMin = 35, IntervalMax = 70, FirstDelay = 20,
+    WarnTime = 4,          -- signals flash + horn this long before the engine enters
+    Speed = 175,           -- studs/s: crosses the whole block in ~2 s
+    Coaches = 6, CoachLength = 17, EngineLength = 19,
+    HalfWidth = 3.3, Height = 8.5,
+}
+
+-- Delivery economy: the customer never pays you. You go back to the vendor, who keeps a cut.
+-- Break the parcel (get hit while carrying it) and you owe the vendor for it.
+Config.Delivery = {
+    PlayerShare = 0.7,     -- share of the order value the vendor pays you
+    BrokenDebtPct = 0.4,   -- debt added when the parcel is destroyed
+    DebtRepayPct = 1.0,    -- share of each payout the vendor keeps until the debt is cleared
 }
 
 return Config

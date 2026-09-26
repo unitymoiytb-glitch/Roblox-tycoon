@@ -322,10 +322,13 @@ local function setNpcGuide(modelName,text,color)
     t.Text=text t.Parent=tutorialArrow
 end
 
-local function setTarget(part,color)
-    if targetPart and targetPart~=part then targetPart.Transparency=1 end
+local targetLabel="🔵 DELIVERY"
+local function isDropPad(part) return part and part.Name:match("^Drop_") ~= nil end
+local function setTarget(part,color,labelText)
+    if isDropPad(targetPart) and targetPart~=part then targetPart.Transparency=1 end
     targetPart=part
-    part.Transparency=.35 -- local only: the pad glows for this player
+    targetLabel=labelText or "🔵 DELIVERY"
+    if isDropPad(part) then part.Transparency=.35 end -- local only: the pad glows for this player
     if marker then marker:Destroy() marker=nil end
     if arrow then arrow:Destroy() arrow=nil end
     marker=Instance.new("Highlight")
@@ -337,7 +340,7 @@ local function setTarget(part,color)
     a.Size=UDim2.fromScale(1,1) a.BackgroundTransparency=1 a.Text="▼" a.TextColor3=Color3.fromRGB(60,155,255) a.TextStrokeTransparency=.2 a.TextScaled=true a.Font=Enum.Font.GothamBlack a.Parent=arrow
 end
 local function clearTarget()
-    if targetPart then targetPart.Transparency=1 end
+    if isDropPad(targetPart) then targetPart.Transparency=1 end
     targetPart=nil
     if marker then marker:Destroy() marker=nil end
     if arrow then arrow:Destroy() arrow=nil end
@@ -348,7 +351,7 @@ nav.BackgroundTransparency=.28 nav.Visible=false
 RunService.RenderStepped:Connect(function()
     local char=player.Character local root=char and char:FindFirstChild("HumanoidRootPart")
     if targetPart and targetPart.Parent and root then
-        local d=(root.Position-targetPart.Position).Magnitude nav.Visible=true nav.Text="🔵 DELIVERY  "..math.floor(d).."m"
+        local d=(root.Position-targetPart.Position).Magnitude nav.Visible=true nav.Text=targetLabel.."  "..math.floor(d).."m"
     elseif promoArrow and promoArrow.Parent and promoArrow.Adornee and root then
         local d=(root.Position-promoArrow.Adornee.Position).Magnitude nav.Visible=true nav.Text="🟡 NEXT DISTRICT  "..math.floor(d).."m"
     else
@@ -400,7 +403,14 @@ UIRE.OnClientEvent:Connect(function(kind,data)
         rank.Text=data.RankName or "?"
         xp.Text=math.floor(data.XP or 0).." XP"
         deliveries.Text=(data.TotalDeliveries or 0).." DEL"
-        resourceLine.Text="🔩 "..tostring(data.Scrap or 0).." SCRAP     🎟 "..tostring(data.Tokens or 0).." TOKENS"
+        local debt=math.floor(data.Debt or 0)
+        if debt>0 then
+            resourceLine.Text="💸 DEBT TO RAJU: ₹"..debt.."   🔩 "..tostring(data.Scrap or 0).."  🎟 "..tostring(data.Tokens or 0)
+            resourceLine.TextColor3=Color3.fromRGB(255,110,90)
+        else
+            resourceLine.Text="🔩 "..tostring(data.Scrap or 0).." SCRAP     🎟 "..tostring(data.Tokens or 0).." TOKENS"
+            resourceLine.TextColor3=Color3.new(1,1,1)
+        end
         local streak=data.DailyStreak or 0
         if streak>=30 then
             dailyStatus.Text="DAILY • 30/30 COMPLETE"
@@ -504,22 +514,33 @@ MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(plr,passId,pu
     if plr==player and purchased then showToast("Purchase complete — rejoin if the boost does not appear immediately") end
 end)
 
+local function showDialog(title,text,buttonText)
+    dialogTitle.Text=title dialogText.Text=text dialogAction.Text=buttonText or "OK" dialog.Visible=true
+end
+
 MissionRE.OnClientEvent:Connect(function(kind,data)
     if kind=="START" then
-        missionTitle.Text="DELIVER: "..data.Item
-        missionInfo.Text="You already have the item. Follow the BLUE arrow and survive. Potential ₹"..data.Potential
-        setTarget(data.Drop,Color3.fromRGB(40,240,120))
+        missionTitle.Text="DELIVER TO: "..tostring(data.Customer or "customer")
+        missionInfo.Text="Carry the "..data.Item.." across the road. Don't get hit: a broken parcel is paid for by YOU. Order value ₹"..data.Potential.."."
+        setTarget(data.Drop,Color3.fromRGB(40,240,120),"🔵 CUSTOMER")
+    elseif kind=="DELIVERED" then
+        showDialog(tostring(data.Customer),"\""..tostring(data.Line).."\"\n\nNo money. Go back to Raju to get your cut (₹"..tostring(data.Expected).." of the ₹"..tostring(data.OrderValue).." order).","...")
+        missionTitle.Text="GO BACK TO RAJU"
+        missionInfo.Text="The customer didn't pay. Cross back to Raju, he pays you ₹"..tostring(data.Expected).." and keeps the rest."
+        if data.Vendor then setTarget(data.Vendor,Color3.fromRGB(255,200,40),"🟡 BACK TO RAJU") else clearTarget() end
     elseif kind=="COMPLETE" then
-        missionTitle.Text="DELIVERY COMPLETE ✓"
-        missionInfo.Text="+₹"..data.Reward.." • +"..data.XP.." XP\nYou survived delivery #"..tostring(data.Count or "?").."."
-        clearTarget() showToast("+₹"..data.Reward.." • DELIVERY COMPLETE")
-    elseif kind=="FAILED" then
-        missionTitle.Text="MISSION FAILED 💥"
-        missionInfo.Text="Compensation ₹"..data.Compensation.." • go back to the vendor."
-        clearTarget() showToast("YOU GOT WRECKED")
+        missionTitle.Text="PAID ✓"
+        local lines={"+₹"..data.Reward.." • +"..data.XP.." XP","Order ₹"..tostring(data.OrderValue).." • your cut ₹"..tostring(data.Gross)}
+        if (data.DebtPaid or 0)>0 then table.insert(lines,"Raju kept ₹"..data.DebtPaid.." for your debt (₹"..tostring(data.Debt).." left)") end
+        missionInfo.Text=table.concat(lines,"\n")
+        clearTarget() showToast("+₹"..data.Reward.." • DELIVERY PAID")
+    elseif kind=="BROKEN" then
+        clearTarget()
+        missionTitle.Text="PRODUCT BROKEN 💥"
+        missionInfo.Text="You owe Raju ₹"..tostring(data.TotalDebt)..". It comes out of your next payouts."
+        showDialog("💥 YOU BROKE THE "..string.upper(tostring(data.Item)),"You got hit and smashed the parcel. Raju wants it paid back.\n\nNew debt: ₹"..tostring(data.Debt).." • Total you owe: ₹"..tostring(data.TotalDebt).."\nIt will be taken from your next payouts.","I'LL PAY IT BACK")
     end
 end)
-
 
 task.spawn(function()
     local world=workspace:WaitForChild("SIT_World",15)

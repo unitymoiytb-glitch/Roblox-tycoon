@@ -4,7 +4,7 @@ Roblox delivery / progression tycoon. Start broke in a tin shack, take jobs from
 cross dangerous traffic to deliver, earn ₹ + XP, buy mobility and businesses, rank up
 (Street Runner → Courier → Delivery Hustler → Trader → Business Boss → Maharaja).
 
-**Current build:** `builds/Survive_India_Tycoon_V26_1_RAGS_MUSIC.rbxlx`. Open it in Roblox Studio and press Play.
+**Current build:** `builds/Survive_India_Tycoon_V27_TRAIN_BIKE_DEBT.rbxlx`. Open it in Roblox Studio and press Play.
 The world is generated at runtime by `ServerScriptService/Main`, so edit mode shows only the spawn.
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in V26 and what was / was not verified.
@@ -23,7 +23,8 @@ src/ServerScriptService/Main/
   TrafficServer.lua     steps one TrafficSim per occupied district, sends snapshots, validates hits
 src/StarterPlayer/StarterPlayerScripts/
   Client.client.lua        HUD, menus, guides, spawn intro camera
-  TrafficClient.client.lua renders traffic, client-side hit detection, horns
+  TrafficClient.client.lua renders traffic + the commuter train, client-side hit detection, horns
+  BikeRider.client.lua     procedural pedalling pose while the bicycle is equipped
 ```
 
 ## Build and check

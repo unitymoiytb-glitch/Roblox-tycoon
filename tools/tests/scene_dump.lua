@@ -2,6 +2,7 @@
 -- (world, NPCs, client-rendered traffic) plus a blocky stand-in avatar at the spawn point.
 local simTime = 0
 SIT.clock = function() return simTime end
+SIT.mock.serverTimeFn = function() return simTime end
 SIT.mount()
 SIT.runServer()
 local mock = SIT.mock
@@ -20,11 +21,14 @@ local home = plr:GetAttribute("HomeSpawn")
 local char, root = mock.makeCharacter(plr, home.Position)
 plr.CharacterAdded:Fire(char)
 SIT.runClient("TrafficClient")
-local seconds = tonumber(PREVIEW_SECONDS) or 42
-for i = 1, 60 * seconds do
+-- Run until the commuter train is passing the middle of the block (or 90 s).
+for i = 1, 60 * 90 do
     simTime += 1 / 60
     RunService.Heartbeat:Fire(1 / 60)
     RunService.RenderStepped:Fire(1 / 60)
+    local train = workspace.SIT_TrafficClient:FindFirstChild("CommuterTrain")
+    local engine = train and train:FindFirstChild("EngineBody")
+    if engine and math.abs(engine.Position.Z) < 25 and i > 60 * 20 then break end
 end
 -- Stand-in avatar (R15-ish proportions) at the spawn, facing the exit.
 local av = Instance.new("Model") av.Name = "Avatar" av.Parent = workspace

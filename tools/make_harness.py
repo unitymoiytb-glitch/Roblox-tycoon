@@ -36,6 +36,7 @@ def main():
     parts.append(fn("Main", read(os.path.join(SRC, "ServerScriptService/Main/init.server.lua"))))
     parts.append(fn("Client", read(os.path.join(SRC, "StarterPlayer/StarterPlayerScripts/Client.client.lua"))))
     parts.append(fn("TrafficClient", read(os.path.join(SRC, "StarterPlayer/StarterPlayerScripts/TrafficClient.client.lua"))))
+    parts.append(fn("BikeRider", read(os.path.join(SRC, "StarterPlayer/StarterPlayerScripts/BikeRider.client.lua"))))
     parts.append(r'''
 local moduleCache = {}
 function require(inst)

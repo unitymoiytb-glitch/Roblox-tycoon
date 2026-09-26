@@ -356,20 +356,6 @@ local function sidewalkBarricade(ctx, w)
     return m
 end
 
--- Planter + fence panel closing the median at one point, so the median cannot be used as a
--- lengthwise walkway past the sidewalk barricades.
-local function medianBlocker(ctx, w)
-    local folder, cx, W, bounds = ctx.folder, ctx.cx, ctx.W, ctx.bounds
-    local m = Instance.new("Model") m.Name = "MedianBlocker" m.Parent = folder
-    local mh = W.MedianHalfWidth
-    P(m, "Planter", V3(mh * 2, 1.4, 3.0), CF(cx, 1.5, w), RGB(150,146,138), M.Concrete, true)
-    ball(P(m, "Shrub", V3(2.6, 2.6, 2.6), CF(cx, 3.0, w), RGB(78,108,56), M.LeafyGrass))
-    P(m, "FencePanel", V3(0.2, 3.4, 5.5), CF(cx, 2.5, w + 2.6), RGB(60,110,90), M.Metal, true)
-    P(m, "FencePanel", V3(0.2, 3.4, 5.5), CF(cx, 2.5, w - 2.6), RGB(60,110,90), M.Metal, true)
-    boundsWall(bounds, "MedianBlocker", cx - mh, cx + mh, w - 5.5, w + 5.5, W.BoundsHeight)
-    return m
-end
-
 -- ------------------------------------------------------------ road + tunnels
 local function buildRoad(folder, cx, W, z, detail)
     local L = W.TrafficHalfLength * 2 + 20
@@ -382,13 +368,26 @@ local function buildRoad(folder, cx, W, z, detail)
         P(folder, "Sidewalk", V3(w, 0.8, walkLen), CFrame.new(cx + side * (W.RoadHalfWidth + w / 2), 0.4, 0), walk, z <= 2 and M.Concrete or M.Pavement, true)
         P(folder, "Kerb", V3(0.5, 0.84, walkLen), CFrame.new(cx + side * (W.RoadHalfWidth + 0.25), 0.42, 0), z <= 2 and RGB(170,150,76) or RGB(210,210,204), M.Concrete)
     end
-    -- Raised median: concrete divider with painted kerbs. Vehicles never reach its centre line,
-    -- so it is the one place a player can stop halfway and re-read the traffic.
+    -- Railway between the two carriageways: ballast bed, sleepers, two rails, warning kerbs.
+    -- Cars never reach it, but a commuter train blasts through every 35-70 s (TrainClient).
     local mh = W.MedianHalfWidth
-    local medLen = W.PenHalfLength * 2 + 60
-    P(folder, "Median", V3(mh * 2, 0.8, medLen), CFrame.new(cx, 0.4, 0), z <= 2 and RGB(138,132,120) or RGB(176,176,170), M.Concrete, true)
+    local railLen = W.TrafficHalfLength * 2 + 20
+    P(folder, "Ballast", V3(mh * 2, 0.5, railLen), CFrame.new(cx, 0.25, 0), RGB(112,102,92), M.Pebble, true)
     for _, s in ipairs({-1, 1}) do
-        P(folder, "MedianKerb", V3(0.3, 0.84, medLen), CFrame.new(cx + s * (mh - 0.15), 0.42, 0), z <= 2 and RGB(214,184,60) or RGB(230,230,226), M.Concrete)
+        P(folder, "RailKerb", V3(0.4, 0.62, railLen), CFrame.new(cx + s * (mh - 0.2), 0.31, 0), z <= 2 and RGB(214,184,60) or RGB(230,230,226), M.Concrete)
+        P(folder, "Rail", V3(0.3, 0.3, railLen), CFrame.new(cx + s * 2.4, 0.78, 0), RGB(150,150,156), M.Metal)
+    end
+    local sleeperStep = detail and 3.5 or 7
+    for zz = -W.PenHalfLength - 8, W.PenHalfLength + 8, sleeperStep do
+        P(folder, "Sleeper", V3(7.2, 0.22, 0.9), CFrame.new(cx, 0.6, zz), RGB(120,114,104), M.Concrete)
+    end
+    -- Level-crossing style signals: the lamps flash red before and while a train passes.
+    for i, sp in ipairs({{-1, -30}, {1, 30}, {-1, 72}, {1, -72}}) do
+        local x = cx + sp[1] * (mh - 0.8)
+        vcyl(folder, "SignalPost", 6.5, 0.3, x, 3.25, sp[2], RGB(40,40,42), M.Metal)
+        local lamp = ball(P(folder, "RailSignalLamp", V3(0.9, 0.9, 0.9), CFrame.new(x, 6.4, sp[2]), RGB(90,20,18), M.SmoothPlastic))
+        lamp.CastShadow = false
+        signBoard(folder, "TrainWarning", V3(3.2, 1.2, 0.12), V3(x, 5.0, sp[2] + 0.2), V3(-sp[1], 0, 0), "⚠ TRAINS", RGB(236,196,40), RGB(20,20,20))
     end
     local step = detail and 13 or 26
     for _, dx in ipairs({-(mh + W.LaneWidth), mh + W.LaneWidth}) do
@@ -764,7 +763,7 @@ function WorldBuilder.build(Config, VehicleFactory)
             tinShack(eastCtx, -66, -50, {name = "DropShack", style = "closed", door = RGB(150,70,60), tank = true})
             tinShack(eastCtx, -50, -32, {name = "FruitStall", style = "counter", goods = RGB(220,150,40), awning = RGB(230,164,40)})
             twoStorey(eastCtx, -32, -12, {name = "DropHouse", paint = C.paint[1]})
-            landmark(eastCtx, -12, 12, {sign = "SHARMA KIRANA STORE"})
+            landmark(eastCtx, -12, 12, {sign = "LUCKY KIRANA STORE"})
             tinShack(eastCtx, 12, 34, {name = "DropShack", style = "closed", door = RGB(70,130,90), laundry = true, drum = true})
             tinShack(eastCtx, 34, 50, {name = "PhoneStall", style = "counter", sign = "MOBILE RECHARGE", signBg = RGB(40,70,160), signFg = RGB(255,255,255), goods = RGB(60,60,64)})
             twoStorey(eastCtx, 50, 70, {name = "DropHouse", paint = C.paint[4]})
@@ -776,8 +775,6 @@ function WorldBuilder.build(Config, VehicleFactory)
             sidewalkBarricade(westCtx, -48)
             sidewalkBarricade(eastCtx, -41)
             sidewalkBarricade(eastCtx, 42)
-            medianBlocker(westCtx, 45)
-            medianBlocker(westCtx, -45)
             info.mechanicCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, 29), V3(cx, 0.8, 29))
             info.brokerCF = CFrame.lookAt(V3(cx - W.SidewalkOuter - 2.6, 0.8, -29), V3(cx, 0.8, -29))
             -- Slow mud on the sidewalks (only four patches; each is one Touched part).

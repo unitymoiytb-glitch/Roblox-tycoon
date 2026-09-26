@@ -347,6 +347,17 @@ function TrafficSim:encode()
     return buf
 end
 
+-- Commuter train: head Z at server time `now`. It starts inside one end tunnel and runs
+-- the whole length of the district in `dir` (+1 / -1). Returns head, tail Z.
+function TrafficSim.trainSpan(train, now, halfLength)
+    local head = -train.dir * (halfLength + 5) + train.dir * train.speed * (now - train.start)
+    return head, head - train.dir * train.length
+end
+
+function TrafficSim.trainDone(train, now, halfLength)
+    return now - train.start > (2 * halfLength + train.length + 20) / train.speed
+end
+
 function TrafficSim.decode(buf, out)
     out = out or {}
     table.clear(out)

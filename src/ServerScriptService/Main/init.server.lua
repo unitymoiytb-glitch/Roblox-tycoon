@@ -79,6 +79,7 @@ local function mergeProfile(saved)
     p.VehicleSkins=type(p.VehicleSkins)=="table" and p.VehicleSkins or {}
     p.Passes=type(p.Passes)=="table" and p.Passes or {}
     p.Scrap=tonumber(p.Scrap) or 0 p.Tokens=tonumber(p.Tokens) or 0
+    p.Debt=math.max(0,tonumber(p.Debt) or 0)
     return p
 end
 local function save(plr)
@@ -129,7 +130,7 @@ sync = function(plr,toast)
         Vehicle=p.Vehicle,Businesses=p.Businesses,TotalDeliveries=p.TotalDeliveries,Toast=toast,NPCUnlocks=p.NPCUnlocks,PromotionReady=promotionReady,
         Scrap=p.Scrap,Tokens=p.Tokens,Skins=p.VehicleSkins,ActiveSkin=p.ActiveSkin,DailyStreak=p.DailyStreak,DailyWait=dailyWait,
         SessionStep=nextSession,SessionMinutes=sessionMinutes,SessionWait=sessionWait,SessionDone=(sessionMinutes==nil),MonthlyReady=monthlyReady,MonthlyDaysRemaining=math.max(0,30-(p.DailyStreak or 0)),
-        VendorSeen=p.VendorSeen,OwnedVehicles=p.OwnedVehicles,Passes=p.Passes,NextRank=nextRank and {Name=nextRank.Name,XP=nextRank.XP,Price=nextRank.Price,Deliveries=nextRank.Deliveries} or nil})
+        VendorSeen=p.VendorSeen,OwnedVehicles=p.OwnedVehicles,Debt=p.Debt or 0,Passes=p.Passes,NextRank=nextRank and {Name=nextRank.Name,XP=nextRank.XP,Price=nextRank.Price,Deliveries=nextRank.Deliveries} or nil})
 end
 local function addCash(plr,amount,reason)
     local p=profiles[plr] if not p then return end
@@ -269,7 +270,9 @@ for z,info in ipairs(layout.zones) do
         local p=profiles[plr] if not p then return end
         local currentZone=math.clamp(rankData(p).Zone,1,5)
         if currentZone~=z then UIRE:FireClient(plr,"TOAST","This vendor does not work with you yet.") return end
-        if activeMissions[plr] then UIRE:FireClient(plr,"TOAST","Finish your current delivery first.") return end
+        local m=activeMissions[plr]
+        if m and m.stage=="return" then UIRE:FireClient(plr,"TOAST","Raju: \"Come here, I'll count your cut.\"") return end
+        if m then UIRE:FireClient(plr,"TOAST","Finish your current delivery first.") return end
         p.VendorSeen[z]=true
         local available={}
         for _,it in ipairs(Config.DeliveryItems[z] or {}) do
@@ -335,7 +338,18 @@ local function onTrafficHit(plr)
     hitCooldown[plr]=now
     local char=plr.Character
     local mission=activeMissions[plr]
-    if mission then local c=math.floor((mission.potential or 0)*Config.HitCompensationPct) activeMissions[plr]=nil if c>0 then addCash(plr,c,"traffic compensation") end MissionRE:FireClient(plr,"FAILED",{Compensation=c}) end
+    local p0=profiles[plr]
+    if mission and p0 and mission.stage=="drop" then
+        -- The parcel is smashed: the vendor wants it paid back.
+        local debt=math.floor((mission.potential or 0)*Config.Delivery.BrokenDebtPct)
+        p0.Debt=(p0.Debt or 0)+debt
+        activeMissions[plr]=nil
+        if mission.customer then mission.customer:Destroy() mission.customer=nil end
+        MissionRE:FireClient(plr,"BROKEN",{Item=mission.item,Debt=debt,TotalDebt=p0.Debt})
+        sync(plr)
+    elseif mission and mission.stage=="return" then
+        UIRE:FireClient(plr,"TOAST","💥 Knocked down. Raju still owes you: walk back to him.")
+    end
     local root=char and char:FindFirstChild("HumanoidRootPart")
     if root then
         root.AssemblyLinearVelocity=Vector3.zero
@@ -345,7 +359,7 @@ local function onTrafficHit(plr)
             if p then
                 teleportHome(plr,math.clamp(rankData(p).Zone,1,5))
                 if hum then hum.Health=hum.MaxHealth end
-                UIRE:FireClient(plr,"TOAST","💥 Flattened. Back home. Try again.")
+                if not activeMissions[plr] then UIRE:FireClient(plr,"TOAST","💥 Flattened. Back to your room.") end
             end
         end)
     end
@@ -365,16 +379,62 @@ local function clearVehicleVisual(plr)
     if vehicleVisuals[plr] then vehicleVisuals[plr]:Destroy() vehicleVisuals[plr]=nil end
 end
 local function weldPart(model,root,size,offset,color,shape)
-    local p=Instance.new("Part") p.Size=size p.Color=color p.Material=Enum.Material.Metal p.CanCollide=false p.Massless=true p.Anchored=false p.Shape=shape or Enum.PartType.Block p.CFrame=root.CFrame*offset p.Parent=model
+    local p=Instance.new("Part") p.Size=size p.Color=color p.Material=Enum.Material.Metal p.CanCollide=false p.CanTouch=false p.CanQuery=false p.Massless=true p.Anchored=false p.Shape=shape or Enum.PartType.Block p.CFrame=root.CFrame*offset p.Parent=model
     local w=Instance.new("WeldConstraint") w.Part0=root w.Part1=p w.Parent=p return p
 end
+-- Welded part between two points in the root's local space (bike tubes).
+local function weldTube(model,root,a,b,thick,color,material)
+    local p=Instance.new("Part") p.Size=Vector3.new(thick,thick,(b-a).Magnitude) p.Color=color p.Material=material or Enum.Material.Metal
+    p.CanCollide=false p.CanTouch=false p.CanQuery=false p.Massless=true p.Anchored=false p.CastShadow=false
+    p.CFrame=root.CFrame*CFrame.lookAt((a+b)/2,b) p.Parent=model
+    local w=Instance.new("WeldConstraint") w.Part0=root w.Part1=p w.Parent=p return p
+end
+
+-- Rusty Indian delivery bicycle welded under the rider (visible to everyone). Built in the
+-- root part's space: forward is -Z, the ground is `g` below the root. BikeRider.client.lua
+-- poses the legs/arms so the player pedals instead of walking.
+local function buildBicycle(m,root,char)
+    local hum=char:FindFirstChildOfClass("Humanoid")
+    local g=-((hum and hum.HipHeight or 2)+root.Size.Y/2)
+    local frame=Color3.fromRGB(48,78,60) local chrome=Color3.fromRGB(170,170,175) local black=Color3.fromRGB(22,22,22)
+    local V=Vector3.new
+    for _,wz in ipairs({1.9,-2.0}) do
+        local tyre=weldPart(m,root,V(0.3,2.5,2.5),CFrame.new(0,g+1.25,wz),black,Enum.PartType.Cylinder) tyre.Material=Enum.Material.Rubber tyre.Name="Tyre"
+        local rim=weldPart(m,root,V(0.34,2.0,2.0),CFrame.new(0,g+1.25,wz),chrome,Enum.PartType.Cylinder) rim.Name="Rim"
+        weldPart(m,root,V(0.4,0.5,0.5),CFrame.new(0,g+1.25,wz),Color3.fromRGB(60,60,64),Enum.PartType.Cylinder).Name="Hub"
+    end
+    local A=V(0,g+1.25,1.9) local B=V(0,g+0.95,0.15) local S=V(0,-1.35,0.4) local H=V(0,-0.1,-1.5) local F=V(0,g+1.25,-2.0)
+    weldTube(m,root,B,S,0.24,frame,Enum.Material.CorrodedMetal) weldTube(m,root,B,H,0.26,frame,Enum.Material.CorrodedMetal)
+    weldTube(m,root,S,H,0.22,frame,Enum.Material.CorrodedMetal) weldTube(m,root,B,A,0.16,frame,Enum.Material.CorrodedMetal)
+    weldTube(m,root,S,A,0.16,frame,Enum.Material.CorrodedMetal) weldTube(m,root,H,F,0.18,chrome)
+    weldTube(m,root,H,V(0,0.25,-1.72),0.18,chrome)
+    weldPart(m,root,V(2.1,0.18,0.18),CFrame.new(0,0.28,-1.75),black).Name="Handlebar"
+    weldPart(m,root,V(0.65,0.22,1.15),CFrame.new(0,-1.18,0.45),Color3.fromRGB(40,30,24)).Name="Saddle"
+    weldPart(m,root,V(1.3,0.12,0.14),CFrame.new(0,g+0.95,0.15),chrome).Name="Crank"
+    weldPart(m,root,V(0.5,0.1,0.35),CFrame.new(0.75,g+0.95,-0.1),black).Name="Pedal"
+    weldPart(m,root,V(0.5,0.1,0.35),CFrame.new(-0.75,g+0.95,0.4),black).Name="Pedal"
+    -- Delivery gear: rear carrier with a strapped parcel, wire basket up front.
+    weldPart(m,root,V(1.0,0.12,1.7),CFrame.new(0,g+2.7,1.75),chrome).Name="Carrier"
+    local box=weldPart(m,root,V(1.2,0.9,1.2),CFrame.new(0,g+3.22,1.75),Color3.fromRGB(160,120,76)) box.Material=Enum.Material.Cardboard box.Name="Parcel"
+    local basket=weldPart(m,root,V(1.3,0.8,1.0),CFrame.new(0,-0.35,-2.35),Color3.fromRGB(110,90,60)) basket.Material=Enum.Material.Fabric basket.Name="Basket"
+    weldPart(m,root,V(0.35,0.3,0.2),CFrame.new(0,-0.05,-2.55),Color3.fromRGB(255,236,190)).Material=Enum.Material.Neon
+end
+
+local function applyMovement(plr)
+    local p=profiles[plr] local hum=plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+    if not p or not hum then return end
+    local v=Config.Vehicles[p.Vehicle] or Config.Vehicles.Feet
+    hum.WalkSpeed=v.Speed
+    hum.UseJumpPower=true
+    hum.JumpPower=v.Jump or 50
+end
+
 local function applyVehicleVisual(plr)
     clearVehicleVisual(plr) local p=profiles[plr] local char=plr.Character if not p or not char or p.Vehicle=="Feet" then return end
     local root=char:FindFirstChild("HumanoidRootPart") if not root then return end
     local m=Instance.new("Model") m.Name="Ride_"..p.Vehicle m.Parent=char vehicleVisuals[plr]=m
     if p.Vehicle=="Bicycle" then
-        -- Bicycle visual disabled for stability; keep only the movement upgrade.
-        m:Destroy() vehicleVisuals[plr]=nil return
+        buildBicycle(m,root,char)
     elseif p.Vehicle=="Hoverboard" then
         weldPart(m,root,Vector3.new(4,.35,1.6),CFrame.new(0,-2.7,.1),Color3.fromRGB(35,185,240))
     elseif p.Vehicle=="Rusty Scooter" then
@@ -393,6 +453,50 @@ end
 local function businessIncome(p) local t=0 for _,b in ipairs(Config.Businesses) do if p.Businesses[b.Id] then t+=b.Income end end return t end
 task.spawn(function() while true do task.wait(10) for plr,p in pairs(profiles) do local inc=businessIncome(p) if inc>0 then addCash(plr,inc*10,"passive businesses") end end end end)
 
+-- Rich customers: they take the parcel, sneer, and never pay. Fictional wealth/status only.
+local CUSTOMERS={
+    {Title="💰 Rich Customer",Shirt=Color3.fromRGB(236,236,230)},
+    {Title="🕶 Snobby Landlord",Shirt=Color3.fromRGB(60,64,90)},
+    {Title="👑 Spoiled Rich Kid",Shirt=Color3.fromRGB(200,40,60)},
+    {Title="💎 Posh Aunty",Shirt=Color3.fromRGB(170,60,140)},
+    {Title="🏦 Gold-Chain Uncle",Shirt=Color3.fromRGB(230,190,70)},
+    {Title="📱 Impatient Boss",Shirt=Color3.fromRGB(40,40,44)},
+}
+local INSULTS={
+    "Don't touch my gate with those filthy hands. Put it on the floor.",
+    "You smell like the gutter. Stand further back.",
+    "Late again. People like you never learn anything.",
+    "Payment? Go beg your vendor. I don't hand money to street rats.",
+    "Look at your clothes. Did you sleep in a drain?",
+    "Tip? Be grateful I even opened the door for you.",
+    "If this is scratched, I'll make sure you never work here again.",
+    "Stop staring at my house and get lost.",
+    "Ugh. Next time send someone presentable.",
+    "Don't breathe on the parcel. Now go away.",
+}
+
+local function makeCustomer(cf,info,zoneIndex)
+    local model=Instance.new("Model") model.Name="Customer" model:SetAttribute("SITZone",zoneIndex) model.Parent=World
+    local function np(name,size,offset,col,shape,mat)
+        local p=Instance.new("Part") p.Name=name p.Size=size p.CFrame=cf*CFrame.new(offset) p.Anchored=true p.Color=col
+        p.Material=mat or Enum.Material.SmoothPlastic p.CanCollide=false p.CanTouch=false p.CanQuery=false
+        if shape then p.Shape=shape end p.Parent=model return p
+    end
+    local skin=Color3.fromRGB(176,128,92)
+    np("Torso",Vector3.new(2.6,3.0,1.5),Vector3.new(0,3.9,0),info.Shirt,nil,Enum.Material.Fabric)
+    np("Belly",Vector3.new(2.4,1.2,1.1),Vector3.new(0,3.2,-0.6),info.Shirt,nil,Enum.Material.Fabric)
+    np("Legs",Vector3.new(2.2,2.4,1.2),Vector3.new(0,1.2,0),Color3.fromRGB(230,226,214),nil,Enum.Material.Fabric)
+    np("ArmL",Vector3.new(0.6,2.4,0.7),Vector3.new(-1.65,3.9,-0.2),info.Shirt,nil,Enum.Material.Fabric)
+    np("ArmR",Vector3.new(0.6,2.4,0.7),Vector3.new(1.65,3.9,-0.2),info.Shirt,nil,Enum.Material.Fabric)
+    local head=np("Head",Vector3.new(1.9,1.9,1.9),Vector3.new(0,6.4,0),skin,Enum.PartType.Ball)
+    local face=Instance.new("Decal") face.Texture="rbxasset://textures/face.png" face.Face=Enum.NormalId.Front face.Parent=head
+    np("Sunglasses",Vector3.new(1.7,0.35,0.2),Vector3.new(0,6.6,-0.9),Color3.fromRGB(15,15,15))
+    np("GoldChain",Vector3.new(1.4,0.2,0.2),Vector3.new(0,4.9,-0.8),Color3.fromRGB(240,200,60),nil,Enum.Material.Neon)
+    np("GoldWatch",Vector3.new(0.7,0.3,0.8),Vector3.new(1.65,3.0,-0.2),Color3.fromRGB(240,200,60),nil,Enum.Material.Metal)
+    billboard(head,info.Title,240,52,Vector3.new(0,2.3,0))
+    return model
+end
+
 local function startMission(plr,itemName)
     local p=profiles[plr] if not p or activeMissions[plr] then return end
     local z=math.clamp(rankData(p).Zone,1,5)
@@ -403,24 +507,55 @@ local function startMission(plr,itemName)
     local vendor=vendorModels[z] and vendorModels[z]:FindFirstChild("Torso")
     local dist=vendor and (vendor.Position-dp.Position).Magnitude or 150
     local base=math.max(p.Rank==1 and 55 or 18,math.floor((16+dist*.12)*rankData(p).Mult*(selected.Mult or 1)*(1+p.Rebirths*.08)*((p.Passes and p.Passes.VIPContracts) and 1.20 or 1)))
-    activeMissions[plr]={stage="drop",drop=dp,potential=base,traveled=0,lastPos=nil,item=selected.Name}
-    MissionRE:FireClient(plr,"START",{Drop=dp,Item=selected.Name,Potential=base})
+    -- The customer waits at their door, just behind the far sidewalk.
+    local info=CUSTOMERS[math.random(1,#CUSTOMERS)]
+    local doorPos=Vector3.new(zoneCenters[z]+Config.World.SidewalkOuter+2.2,0.8,dp.Position.Z)
+    local customer=makeCustomer(CFrame.lookAt(doorPos,doorPos-Vector3.new(1,0,0)),info,z)
+    activeMissions[plr]={stage="drop",zone=z,drop=dp,potential=base,traveled=0,lastPos=nil,item=selected.Name,customer=customer,customerTitle=info.Title}
+    MissionRE:FireClient(plr,"START",{Drop=dp,Item=selected.Name,Potential=base,Customer=info.Title,Share=Config.Delivery.PlayerShare})
 end
+
+local function removeCustomer(m,delay)
+    local c=m and m.customer
+    if not c then return end
+    m.customer=nil
+    if delay then task.delay(delay,function() if c.Parent then c:Destroy() end end) else c:Destroy() end
+end
+
+local function payAtVendor(plr,m)
+    local p=profiles[plr]
+    local bonus=math.floor(m.traveled*.018*rankData(p).Mult)
+    local gross=math.floor(m.potential*Config.Delivery.PlayerShare)+bonus
+    local repay=math.min(p.Debt or 0,math.floor(gross*Config.Delivery.DebtRepayPct))
+    p.Debt=(p.Debt or 0)-repay
+    local net=gross-repay
+    local xp=28
+    p.TotalDeliveries+=1 activeMissions[plr]=nil
+    if net>0 then addCash(plr,net,"Raju paid you") else sync(plr,"Raju kept everything for your debt") end
+    addXP(plr,xp)
+    MissionRE:FireClient(plr,"COMPLETE",{Reward=net,Gross=gross,OrderValue=m.potential,DebtPaid=repay,Debt=p.Debt,XP=xp,Count=p.TotalDeliveries})
+    if p.TotalDeliveries==1 then UIRE:FireClient(plr,"MILESTONE",{Title="FIRST DELIVERY!",Text="Buy a bicycle • go see the mechanic",Icon="🚲"})
+    elseif p.TotalDeliveries==2 then UIRE:FireClient(plr,"MILESTONE",{Title="NEW CARGO",Text="Questionable Lunch contracts are now available",Icon="📦"})
+    elseif p.TotalDeliveries==4 then UIRE:FireClient(plr,"MILESTONE",{Title="BUSINESS UNLOCKED",Text="The Street Broker will finally talk to you",Icon="💼"})
+    elseif p.TotalDeliveries==5 then UIRE:FireClient(plr,"MILESTONE",{Title="RISKIER CARGO",Text="Cheap Parcel contracts now pay more",Icon="⚠️"})
+    elseif p.TotalDeliveries==8 then UIRE:FireClient(plr,"MILESTONE",{Title="YOU'RE GETTING CLOSE",Text="4 more deliveries until the next district",Icon="🔥"}) end
+end
+
 RunService.Heartbeat:Connect(function()
     for plr,m in pairs(activeMissions) do
         local root=plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
         if root then
             if m.lastPos then m.traveled+=math.min((root.Position-m.lastPos).Magnitude,12) end m.lastPos=root.Position
             if m.stage=="drop" and (root.Position-m.drop.Position).Magnitude<9 then
-                local p=profiles[plr] local bonus=math.floor(m.traveled*.018*rankData(p).Mult) local reward=m.potential+bonus local xp=28
-                p.TotalDeliveries+=1 activeMissions[plr]=nil
-                addCash(plr,reward,"delivery") addXP(plr,xp)
-                MissionRE:FireClient(plr,"COMPLETE",{Reward=reward,XP=xp,Count=p.TotalDeliveries})
-                if p.TotalDeliveries==1 then UIRE:FireClient(plr,"MILESTONE",{Title="FIRST DELIVERY!",Text="Speed upgrade unlocked • go see the mechanic",Icon="🚲"})
-                elseif p.TotalDeliveries==2 then UIRE:FireClient(plr,"MILESTONE",{Title="NEW CARGO",Text="Questionable Lunch contracts are now available",Icon="📦"})
-                elseif p.TotalDeliveries==4 then UIRE:FireClient(plr,"MILESTONE",{Title="BUSINESS UNLOCKED",Text="The Street Broker will finally talk to you",Icon="💼"})
-                elseif p.TotalDeliveries==5 then UIRE:FireClient(plr,"MILESTONE",{Title="RISKIER CARGO",Text="Cheap Parcel contracts now pay more",Icon="⚠️"})
-                elseif p.TotalDeliveries==8 then UIRE:FireClient(plr,"MILESTONE",{Title="YOU'RE GETTING CLOSE",Text="4 more deliveries until the next district",Icon="🔥"}) end
+                -- Delivered, but the customer refuses to pay: back across the road to the vendor.
+                m.stage="return"
+                local vendor=vendorModels[m.zone] and vendorModels[m.zone]:FindFirstChild("Torso")
+                m.vendor=vendor
+                MissionRE:FireClient(plr,"DELIVERED",{Customer=m.customerTitle,Line=INSULTS[math.random(1,#INSULTS)],Vendor=vendor,
+                    Expected=math.floor(m.potential*Config.Delivery.PlayerShare),OrderValue=m.potential})
+                removeCustomer(m,6)
+            elseif m.stage=="return" and m.vendor and ((root.Position-m.vendor.Position)*Vector3.new(1,0,1)).Magnitude<11 then
+                payAtVendor(plr,m)
             end
         end
     end
@@ -434,7 +569,7 @@ local function tryRankUp(plr)
     if p.XP<nr.XP then sync(plr,"Need "..nr.XP.." XP") return end
     if p.Cash<nr.Price then sync(plr,"Need ₹"..fmt(nr.Price)) return end
     p.Cash-=nr.Price p.Rank+=1 p.Vehicle=nr.Vehicle p.OwnedVehicles[nr.Vehicle]=true applyVehicleVisual(plr)
-    local hum=plr.Character and plr.Character:FindFirstChildOfClass("Humanoid") if hum then hum.WalkSpeed=Config.Vehicles[p.Vehicle].Speed end
+    applyMovement(plr)
     sync(plr,"RANK UP → "..nr.Name) refreshLook(plr)
     -- Districts are sealed blocks, so a promotion moves the player into the next one.
     local newZone=math.clamp(nr.Zone,1,5)
@@ -459,7 +594,7 @@ ActionRE.OnServerEvent:Connect(function(plr,action,arg)
             if p.Cash<v.Price then sync(plr,"Not enough cash") return end
             p.Cash-=v.Price p.OwnedVehicles[arg]=true p.Vehicle=arg
         end
-        local hum=plr.Character and plr.Character:FindFirstChildOfClass("Humanoid") if hum then hum.WalkSpeed=v.Speed end applyVehicleVisual(plr) sync(plr,"Equipped "..arg)
+        applyMovement(plr) applyVehicleVisual(plr) sync(plr,"Equipped "..arg)
     elseif action=="BUY_BUSINESS" then
         if not p.NPCUnlocks.Broker then sync(plr,"Find the street broker first") return end
         for _,b in ipairs(Config.Businesses) do if b.Id==arg and not p.Businesses[b.Id] then
@@ -468,7 +603,7 @@ ActionRE.OnServerEvent:Connect(function(plr,action,arg)
         end end
     elseif action=="REBIRTH" then
         if p.Rank<#Config.Ranks-1 then sync(plr,"Reach Business Boss first") return end local cost=1000000*(3^p.Rebirths)
-        if p.Cash<cost then sync(plr,"Need ₹"..fmt(cost)) return end p.Rebirths+=1 p.Cash=0 p.XP=0 p.Rank=1 p.Vehicle="Feet" p.OwnedVehicles={Feet=true} p.Businesses={} p.TotalDeliveries=0 clearVehicleVisual(plr) sync(plr,"REBIRTH #"..p.Rebirths) teleportHome(plr,1) refreshLook(plr)
+        if p.Cash<cost then sync(plr,"Need ₹"..fmt(cost)) return end p.Rebirths+=1 p.Cash=0 p.XP=0 p.Rank=1 p.Vehicle="Feet" p.OwnedVehicles={Feet=true} p.Businesses={} p.TotalDeliveries=0 p.Debt=0 activeMissions[plr]=nil clearVehicleVisual(plr) applyMovement(plr) sync(plr,"REBIRTH #"..p.Rebirths) teleportHome(plr,1) refreshLook(plr)
 
     elseif action=="OPEN_LOOTBOX" then
         if (p.Tokens or 0)<3 then sync(plr,"Need 3 tokens for a lootbox") return end
@@ -545,7 +680,7 @@ Players.PlayerAdded:Connect(function(plr)
     sessionStarts[plr]=os.time() sessionClaimIndex[plr]=0
     plr:SetAttribute("HomeSpawn",homeSpawns[math.clamp(rankData(p).Zone,1,5)])
     plr.CharacterAdded:Connect(function(char)
-        task.wait(.5) local p=profiles[plr] local hum=char:FindFirstChildOfClass("Humanoid") if hum then hum.WalkSpeed=(Config.Vehicles[p.Vehicle] or Config.Vehicles.Feet).Speed end
+        task.wait(.5) applyMovement(plr)
         teleportHome(plr,math.clamp(rankData(p).Zone,1,5)) applyVehicleVisual(plr)
         -- Wait for the avatar's clothes/body to load before swapping them for rags.
         if not plr:HasAppearanceLoaded() then
@@ -559,6 +694,6 @@ Players.PlayerAdded:Connect(function(plr)
     end)
     task.delay(1.5,function() sync(plr,"Talk to NPCs to discover upgrades") end)
 end)
-Players.PlayerRemoving:Connect(function(plr) save(plr) clearVehicleVisual(plr) profiles[plr]=nil activeMissions[plr]=nil sessionStarts[plr]=nil sessionClaimIndex[plr]=nil remoteCooldowns[plr]=nil hitCooldown[plr]=nil slowedPlayers[plr]=nil end)
+Players.PlayerRemoving:Connect(function(plr) if activeMissions[plr] then removeCustomer(activeMissions[plr]) end save(plr) clearVehicleVisual(plr) profiles[plr]=nil activeMissions[plr]=nil sessionStarts[plr]=nil sessionClaimIndex[plr]=nil remoteCooldowns[plr]=nil hitCooldown[plr]=nil slowedPlayers[plr]=nil end)
 task.spawn(function() while true do task.wait(Config.AutosaveSeconds) for plr in pairs(profiles) do save(plr) end end end)
 game:BindToClose(function() for plr in pairs(profiles) do save(plr) end task.wait(1) end)

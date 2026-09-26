@@ -213,7 +213,7 @@ local InstMt = {}
 typeTags[InstMt] = "Instance"
 mock.allInstances = {}
 local methods = {}
-local eventNames = {Touched = true, Triggered = true, OnServerEvent = true, OnClientEvent = true, MouseButton1Click = true, ChildAdded = true, Changed = true, Completed = true, CharacterAdded = true, Died = true}
+local eventNames = {Touched = true, Triggered = true, OnServerEvent = true, OnClientEvent = true, MouseButton1Click = true, ChildAdded = true, Changed = true, Completed = true, CharacterAdded = true, Died = true, CharacterRemoving = true, CharacterAppearanceLoaded = true}
 
 local function newInstance(class)
     local inst = setmetatable({__props = {ClassName = class, Name = class, __children = {}, __attrs = {}}}, InstMt)
@@ -322,7 +322,7 @@ end
 function methods.GetDataStore() error("DataStore unavailable (mock)") end
 function methods.UserOwnsGamePassAsync() return false end
 function methods.Create() return {Play = function() end, Completed = Signal()} end
-function methods.GetServerTimeNow() return os.clock() end
+function methods.GetServerTimeNow() return mock.serverTimeFn and mock.serverTimeFn() or os.clock() end
 function methods.GetSunDirection() return V3(0, 1, 0) end
 
 Instance = {new = function(class, parent)
