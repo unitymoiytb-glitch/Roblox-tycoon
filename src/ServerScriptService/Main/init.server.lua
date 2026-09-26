@@ -154,6 +154,7 @@ end
 -- =====================================================================
 local WorldBuilder = require(script:WaitForChild("WorldBuilder"))
 local TrafficServer = require(script:WaitForChild("TrafficServer"))
+local PlayerLook = require(script:WaitForChild("PlayerLook"))
 local VehicleFactory = require(ReplicatedStorage.Shared:WaitForChild("VehicleFactory"))
 local TrafficSim = require(ReplicatedStorage.Shared:WaitForChild("TrafficSim"))
 
@@ -220,6 +221,13 @@ local function teleportHome(plr,zoneIndex)
         root.AssemblyLinearVelocity=Vector3.zero
         root.CFrame=spawnCF
     end
+end
+
+-- Rank 1 wears street rags with "LESS THAN NOTHING" overhead; later ranks show their rank name.
+local function refreshLook(plr)
+    local p=profiles[plr] local char=plr.Character
+    if not p or not char then return end
+    PlayerLook.apply(char,rankData(p),p.Rank,plr.DisplayName)
 end
 
 local rankGuards={}
@@ -427,7 +435,7 @@ local function tryRankUp(plr)
     if p.Cash<nr.Price then sync(plr,"Need ₹"..fmt(nr.Price)) return end
     p.Cash-=nr.Price p.Rank+=1 p.Vehicle=nr.Vehicle p.OwnedVehicles[nr.Vehicle]=true applyVehicleVisual(plr)
     local hum=plr.Character and plr.Character:FindFirstChildOfClass("Humanoid") if hum then hum.WalkSpeed=Config.Vehicles[p.Vehicle].Speed end
-    sync(plr,"RANK UP → "..nr.Name)
+    sync(plr,"RANK UP → "..nr.Name) refreshLook(plr)
     -- Districts are sealed blocks, so a promotion moves the player into the next one.
     local newZone=math.clamp(nr.Zone,1,5)
     task.delay(.6,function()
@@ -460,7 +468,7 @@ ActionRE.OnServerEvent:Connect(function(plr,action,arg)
         end end
     elseif action=="REBIRTH" then
         if p.Rank<#Config.Ranks-1 then sync(plr,"Reach Business Boss first") return end local cost=1000000*(3^p.Rebirths)
-        if p.Cash<cost then sync(plr,"Need ₹"..fmt(cost)) return end p.Rebirths+=1 p.Cash=0 p.XP=0 p.Rank=1 p.Vehicle="Feet" p.OwnedVehicles={Feet=true} p.Businesses={} p.TotalDeliveries=0 clearVehicleVisual(plr) sync(plr,"REBIRTH #"..p.Rebirths) teleportHome(plr,1)
+        if p.Cash<cost then sync(plr,"Need ₹"..fmt(cost)) return end p.Rebirths+=1 p.Cash=0 p.XP=0 p.Rank=1 p.Vehicle="Feet" p.OwnedVehicles={Feet=true} p.Businesses={} p.TotalDeliveries=0 clearVehicleVisual(plr) sync(plr,"REBIRTH #"..p.Rebirths) teleportHome(plr,1) refreshLook(plr)
 
     elseif action=="OPEN_LOOTBOX" then
         if (p.Tokens or 0)<3 then sync(plr,"Need 3 tokens for a lootbox") return end
@@ -539,6 +547,15 @@ Players.PlayerAdded:Connect(function(plr)
     plr.CharacterAdded:Connect(function(char)
         task.wait(.5) local p=profiles[plr] local hum=char:FindFirstChildOfClass("Humanoid") if hum then hum.WalkSpeed=(Config.Vehicles[p.Vehicle] or Config.Vehicles.Feet).Speed end
         teleportHome(plr,math.clamp(rankData(p).Zone,1,5)) applyVehicleVisual(plr)
+        -- Wait for the avatar's clothes/body to load before swapping them for rags.
+        if not plr:HasAppearanceLoaded() then
+            local loaded=false
+            local conn=plr.CharacterAppearanceLoaded:Connect(function() loaded=true end)
+            local t0=os.clock()
+            while not loaded and os.clock()-t0<5 and char.Parent do task.wait(.1) end
+            conn:Disconnect()
+        end
+        if char.Parent then refreshLook(plr) end
     end)
     task.delay(1.5,function() sync(plr,"Talk to NPCs to discover upgrades") end)
 end)

@@ -357,6 +357,8 @@ function methods.GetService(_, name)
     return services[name]
 end
 function methods.BindToClose() end
+function methods.HasAppearanceLoaded() return true end
+function methods.Disconnect() end
 workspace.Parent = game
 workspace.__props.CurrentCamera = newInstance("Camera")
 workspace.__props.CurrentCamera.__props.FieldOfView = 70
@@ -381,6 +383,7 @@ function mock.makePlayer(name, userId)
     plr.__props.DisplayName = name
     plr.__props.UserId = userId or 1
     plr.__props.CharacterAdded = Signal()
+    plr.__props.CharacterAppearanceLoaded = Signal()
     plr.Parent = methods.GetService(game, "Players")
     table.insert(mock.players, plr)
     return plr
@@ -401,6 +404,13 @@ function mock.makeCharacter(plr, pos)
     hum.__props.HipHeight = 2
     hum.__props.WalkSpeed = 16
     hum.Parent = char
+    for name, size, off in pairs({Head = {V3(1.2, 1.2, 1.2), 1.8}, UpperTorso = {V3(2, 1.6, 1), 0.3}, LowerTorso = {V3(2, 0.4, 1), -0.8},
+        LeftUpperLeg = {V3(1, 1.2, 1), -1.6}, RightUpperLeg = {V3(1, 1.2, 1), -1.6}, LeftLowerLeg = {V3(1, 1.1, 1), -2.6},
+        RightLowerLeg = {V3(1, 1.1, 1), -2.6}, LeftFoot = {V3(1, 0.3, 1), -3.3}, RightFoot = {V3(1, 0.3, 1), -3.3}}) do
+        local bp = newInstance("Part") bp.Name = name bp.Size = size[1] bp.CFrame = CFrame.new(pos + V3(0, size[2], 0))
+        bp.Color = name == "Head" and Color3.fromRGB(150, 105, 75) or Color3.fromRGB(40, 80, 160) bp.Parent = char
+    end
+    local shirt = newInstance("Shirt") shirt.Name = "Shirt" shirt.Parent = char
     char.Parent = workspace
     plr.Character = char
     return char, root, hum

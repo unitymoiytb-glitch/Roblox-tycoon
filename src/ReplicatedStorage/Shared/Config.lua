@@ -25,7 +25,7 @@ Config.MonthlyReward = {Cash=1200, Tokens=15, Scrap=35, Skin="Royal Chrome", Veh
 
 -- Rank 2 is deliberately paced to take about 10+ minutes for a new player.
 Config.Ranks = {
-    {Name="Street Runner", XP=0, Price=0, Deliveries=0, Zone=1, Mult=1.0, Item="Suspicious Bucket", Vehicle="Feet", House="Tin Shack"},
+    {Name="Street Runner", Title="Less Than Nothing", XP=0, Price=0, Deliveries=0, Zone=1, Mult=1.0, Item="Suspicious Bucket", Vehicle="Feet", House="Tin Shack"},
     {Name="Courier", XP=360, Price=1400, Deliveries=12, Zone=2, Mult=1.55, Item="Cloud Puffs", Vehicle="Hoverboard", House="Concrete Room"},
     {Name="Delivery Hustler", XP=1500, Price=12000, Deliveries=35, Zone=3, Mult=3.1, Item="Food App Order", Vehicle="Rusty Scooter", House="Small Flat"},
     {Name="Trader", XP=7000, Price=90000, Deliveries=85, Zone=4, Mult=8.4, Item="Electronics Crate", Vehicle="Tuk-Tuk", House="City Apartment"},

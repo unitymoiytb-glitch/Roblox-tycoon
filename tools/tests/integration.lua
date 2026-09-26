@@ -50,6 +50,19 @@ local char, root, hum = mock.makeCharacter(plr, home.Position)
 plr.CharacterAdded:Fire(char)
 check((root.Position - home.Position).Magnitude < 0.01 and root.CFrame.LookVector.X > 0.99, "character is placed in the starter room facing the exit (+X)")
 
+local title = char.Head:FindFirstChild("SIT_Title")
+check(title and title.Role.Text == "LESS THAN NOTHING" and title.PlayerName.Text == "Tester", "rank-1 player shows LESS THAN NOTHING above their head")
+local rags = char:FindFirstChild("SIT_Rags")
+check(rags and #rags:GetChildren() >= 8 and char:FindFirstChild("Shirt") == nil and char.UpperTorso.Material.Name == "Fabric", "rank-1 player wears the torn, dirty rags (" .. (rags and #rags:GetChildren() or 0) .. " details)")
+check(char.Head.Color.R > 0.5 and char.Head:GetAttribute("SIT_OrigColor") == nil, "skin colour untouched")
+do -- promotion swaps the look back without a respawn, and rebirth puts the rags back on
+    local PlayerLook = require(SIT.mainScript.PlayerLook)
+    PlayerLook.apply(char, Config.Ranks[2], 2, "Tester")
+    check(char:FindFirstChild("SIT_Rags") == nil and char:FindFirstChild("Shirt") ~= nil and char.UpperTorso.Material.Name ~= "Fabric"
+        and char.Head.SIT_Title.Role.Text == "COURIER", "rank 2 restores the avatar's own clothes and shows COURIER")
+    PlayerLook.apply(char, Config.Ranks[1], 1, "Tester")
+    check(char:FindFirstChild("SIT_Rags") ~= nil and char:FindFirstChild("Shirt") == nil, "back to rank 1 (rebirth) puts the rags back on")
+end
 SIT.runClient("Client")
 SIT.runClient("TrafficClient")
 runDelayed(2)

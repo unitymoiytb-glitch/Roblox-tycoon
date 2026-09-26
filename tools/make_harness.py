@@ -32,6 +32,7 @@ def main():
     parts.append(fn("TrafficSim", read(os.path.join(SRC, "ReplicatedStorage/Shared/TrafficSim.lua"))))
     parts.append(fn("WorldBuilder", read(os.path.join(SRC, "ServerScriptService/Main/WorldBuilder.lua"))))
     parts.append(fn("TrafficServer", read(os.path.join(SRC, "ServerScriptService/Main/TrafficServer.lua"))))
+    parts.append(fn("PlayerLook", read(os.path.join(SRC, "ServerScriptService/Main/PlayerLook.lua"))))
     parts.append(fn("Main", read(os.path.join(SRC, "ServerScriptService/Main/init.server.lua"))))
     parts.append(fn("Client", read(os.path.join(SRC, "StarterPlayer/StarterPlayerScripts/Client.client.lua"))))
     parts.append(fn("TrafficClient", read(os.path.join(SRC, "StarterPlayer/StarterPlayerScripts/TrafficClient.client.lua"))))
@@ -52,7 +53,7 @@ function SIT.mount()
     module(shared, "Config") module(shared, "VehicleFactory") module(shared, "TrafficSim")
     local SSS = game:GetService("ServerScriptService")
     local main = Instance.new("Script") main.Name = "Main" main.Parent = SSS
-    module(main, "WorldBuilder") module(main, "TrafficServer")
+    module(main, "WorldBuilder") module(main, "TrafficServer") module(main, "PlayerLook")
     SIT.mainScript = main
 end
 function SIT.runServer() SIT.src.Main(SIT.mainScript) end

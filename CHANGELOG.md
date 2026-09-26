@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## V26.1 RAGS + MUSIC
+
+- **Background music** is now `rbxassetid://106840103375464`, in `Client.client.lua` at volume 0.2.
+- **Starting skin (rank 1):** new module `ServerScriptService/Main/PlayerLook.lua`.
+  - The avatar's Shirt, Pants and T-shirt are stored away. The torso is recoloured as a
+    sweat-stained vest and the legs as mud-brown trousers, in Fabric material.
+  - 11 welded, non-colliding details: stains, a rip showing skin on the chest and the knee, a
+    sewn-on patch, back grime, a ragged hem, a mud splash, a frayed cuff and bare dirty feet.
+  - The player's skin colour is never changed. No clothing asset IDs are used.
+- **Title above the player:** "LESS THAN NOTHING" (rank 1 `Title`, set in `Config.Ranks`), with
+  the player's name below. Roblox's default overhead name is hidden.
+  - After a promotion the rags come off, the avatar's own clothes return, and the title shows
+    the rank name (e.g. "COURIER"). Rebirth puts the rags back on. No respawn is needed.
+- **Verified:** the mock integration test checks the title, the rags, that skin is untouched,
+  and the rank-2 restore and rank-1 reapply. **Not verified:** how it looks on real R15/R6
+  avatars in Studio, and whether the music asset plays.
+
 ## V26 POLISHED_START (from V25 CHAOS_POLISH)
 
 **Inputs:** only `Survive_India_Tycoon_V25_CHAOS_POLISH.rbxlx` was supplied. The source zip,
